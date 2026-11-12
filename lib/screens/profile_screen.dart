@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../main.dart' show supabase;
+import '../main.dart' show supabase, themeNotifier; // 👈 Import the themeNotifier
 import '../services/image_service.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -71,7 +72,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile details saved!')));
   }
 
-  // 👇 NEW: Sends reset link to email
   Future<void> _sendPasswordResetEmail() async {
     if (_email == null) return;
     try {
@@ -89,6 +89,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
+  }
+
+  // 👇 Function to save theme preference
+  Future<void> _changeTheme(ThemeMode mode) async {
+    themeNotifier.value = mode;
+    final prefs = await SharedPreferences.getInstance();
+    if (mode == ThemeMode.light) await prefs.setString('app_theme', 'light');
+    if (mode == ThemeMode.dark) await prefs.setString('app_theme', 'dark');
+    if (mode == ThemeMode.system) await prefs.remove('app_theme');
   }
 
   @override
@@ -132,6 +141,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 trailing: _isAdmin == true ? const Chip(label: Text('ADMIN', style: TextStyle(fontSize: 10))) : null,
               ),
             ),
+            
+            // 👇 THEME SWITCHER UI 👇
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.palette),
+                title: const Text('App Theme'),
+                subtitle: const Text('Choose Light, Dark, or System default'),
+                trailing: DropdownButton<ThemeMode>(
+                  value: themeNotifier.value,
+                  underline: const SizedBox(),
+                  onChanged: (ThemeMode? newMode) {
+                    if (newMode != null) _changeTheme(newMode);
+                  },
+                  items: const [
+                    DropdownMenuItem(value: ThemeMode.system, child: Text('System')),
+                    DropdownMenuItem(value: ThemeMode.light, child: Text('Light')),
+                    DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark')),
+                  ],
+                ),
+              ),
+            ),
+            // 👆 ----------------- 👆
+
             const SizedBox(height: 24),
             TextField(controller: _nameCtrl, decoration: const InputDecoration(labelText: 'Full Name', border: OutlineInputBorder())),
             const SizedBox(height: 16),

@@ -69,7 +69,7 @@ class _ReviewsSectionState extends State<ReviewsSection> {
             if (_summary != null && (_summary!['review_count'] ?? 0) > 0)
               Row(children: [
                 const Icon(Icons.star, size: 18, color: Colors.amber),
-                Text(' ${_summary!['avg_rating']} (${_summary!['review_count']})'),
+                Text(' ${_summary!['avg_rating']} (${_summary!['review_count']})', style: const TextStyle(fontWeight: FontWeight.bold)),
               ]),
             const Spacer(),
             TextButton.icon(
@@ -86,24 +86,28 @@ class _ReviewsSectionState extends State<ReviewsSection> {
               return const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()));
             }
             final rows = snap.data ?? [];
-            if (rows.isEmpty) return const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('No reviews yet.'));
+            if (rows.isEmpty) return const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('No reviews yet.', style: TextStyle(color: Colors.grey)));
             
             return Column(
               children: rows.map((r) {
                 final name = r['profiles']?['full_name'] ?? 'User';
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const CircleAvatar(child: Icon(Icons.person)),
-                  title: Text(name),
+                  leading: CircleAvatar(
+                    backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    child: Text(name[0].toUpperCase(), style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
+                  ),
+                  title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       RatingBarIndicator(
                         rating: (r['rating'] as num).toDouble(),
-                        itemSize: 16,
+                        itemSize: 14,
                         itemBuilder: (_, __) => const Icon(Icons.star, color: Colors.amber),
                       ),
-                      if ((r['comment'] ?? '').toString().isNotEmpty) Text(r['comment']),
+                      const SizedBox(height: 4),
+                      if ((r['comment'] ?? '').toString().isNotEmpty) Text(r['comment'], style: const TextStyle(color: Colors.grey)),
                     ],
                   ),
                 );
