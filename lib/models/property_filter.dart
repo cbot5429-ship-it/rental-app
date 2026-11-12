@@ -6,6 +6,8 @@ class PropertyFilter {
   int? minBathrooms;
   String? propertyType;
   String? furnishing;
+  String? listingType; // 'buy', 'rent', 'commercial'
+  String? searchQuery;
 
   int get activeCount {
     int n = 0;

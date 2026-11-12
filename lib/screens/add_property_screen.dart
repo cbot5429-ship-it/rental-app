@@ -21,14 +21,13 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
   String? _type;
   String? _furnishing;
+  String? _listingType = 'rent'; // Default
   List<XFile> _images = [];
   bool _loading = false;
 
   Future<void> _pickImages() async {
     final picked = await ImageService.pickMultiple();
-    if (picked.isNotEmpty) {
-      setState(() => _images.addAll(picked));
-    }
+    if (picked.isNotEmpty) setState(() => _images.addAll(picked));
   }
 
   Future<void> _submit() async {
@@ -41,11 +40,8 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     setState(() => _loading = true);
     try {
       final uid = supabase.auth.currentUser!.id;
-      
-      // 1. Upload images to Storage
       final imageUrls = await ImageService.uploadAll(_images, uid);
 
-      // 2. Insert row into Database
       await supabase.from('properties').insert({
         'owner_id': uid,
         'title': _titleCtrl.text.trim(),
@@ -56,11 +52,12 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         'bathrooms': int.parse(_bathsCtrl.text.trim()),
         'property_type': _type,
         'furnishing': _furnishing,
+        'listing_type': _listingType, // 👈 Save the Buy/Rent/Commercial type
         'images': imageUrls,
         'is_available': true,
       });
 
-      if (mounted) Navigator.pop(context, true); // Return true to trigger refresh on HomeScreen
+      if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
@@ -80,7 +77,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // --- IMAGE PICKER UI ---
               const Text('Property Photos', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
               SizedBox(
@@ -94,10 +90,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                         future: file.readAsBytes(),
                         builder: (context, snap) {
                           if (!snap.hasData) return const SizedBox(width: 100);
-                          return ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.memory(snap.data!, width: 100, height: 100, fit: BoxFit.cover),
-                          );
+                          return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(snap.data!, width: 100, height: 100, fit: BoxFit.cover));
                         },
                       ),
                     )),
@@ -105,11 +98,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                       onTap: _pickImages,
                       child: Container(
                         width: 100, height: 100,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade400),
-                        ),
+                        decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade400)),
                         child: const Icon(Icons.add_a_photo, color: Colors.grey),
                       ),
                     ),
@@ -117,17 +106,26 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              
-              // --- TEXT FIELDS ---
+              DropdownButtonFormField<String>(
+                value: _listingType,
+                decoration: const InputDecoration(labelText: 'Listing Type', border: OutlineInputBorder()),
+                items: const [
+                  DropdownMenuItem(value: 'buy', child: Text('For Sale (Buy)')),
+                  DropdownMenuItem(value: 'rent', child: Text('For Rent')),
+                  DropdownMenuItem(value: 'commercial', child: Text('Commercial')),
+                ],
+                onChanged: (v) => setState(() => _listingType = v),
+              ),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _titleCtrl,
-                decoration: const InputDecoration(labelText: 'Title (e.g. Cozy 2BR Apartment)', border: OutlineInputBorder()),
+                decoration: const InputDecoration(labelText: 'Title', border: OutlineInputBorder()),
                 validator: (v) => v!.isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _cityCtrl,
-                decoration: const InputDecoration(labelText: 'City', border: OutlineInputBorder()),
+                decoration: const InputDecoration(labelText: 'City / Locality', border: OutlineInputBorder()),
                 validator: (v) => v!.isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 12),
@@ -137,7 +135,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                     child: TextFormField(
                       controller: _priceCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Price / month', border: OutlineInputBorder()),
+                      decoration: const InputDecoration(labelText: 'Price (₹)', border: OutlineInputBorder()),
                       validator: (v) => double.tryParse(v ?? '') == null ? 'Invalid' : null,
                     ),
                   ),
@@ -167,8 +165,13 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       value: _type,
-                      decoration: const InputDecoration(labelText: 'Type', border: OutlineInputBorder()),
-                      items: ['apartment', 'house', 'studio', 'room'].map((e) => DropdownMenuItem(value: e, child: Text(e.toUpperCase()))).toList(),
+                      decoration: const InputDecoration(labelText: 'Property Type', border: OutlineInputBorder()),
+                      items: const [
+                        DropdownMenuItem(value: 'Apartment', child: Text('Apartment')),
+                        DropdownMenuItem(value: 'Gated Society', child: Text('Gated Society')),
+                        DropdownMenuItem(value: 'Gated Community Villa', child: Text('Gated Community Villa')),
+                        DropdownMenuItem(value: 'Independent House/Villa', child: Text('Independent House/Villa')),
+                      ],
                       onChanged: (v) => setState(() => _type = v),
                       validator: (v) => v == null ? 'Required' : null,
                     ),
@@ -192,11 +195,8 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                 validator: (v) => v!.isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 24),
-              
-              // --- SUBMIT BUTTON ---
               SizedBox(
-                width: double.infinity,
-                height: 50,
+                width: double.infinity, height: 50,
                 child: FilledButton(
                   onPressed: _loading ? null : _submit,
                   child: _loading ? const CircularProgressIndicator(color: Colors.white) : const Text('Publish Listing', style: TextStyle(fontSize: 16)),

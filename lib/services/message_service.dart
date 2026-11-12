@@ -29,12 +29,13 @@ class MessageService {
     return created['id'] as String;
   }
 
-  // 2. Fetch all conversations for the Inbox screen
+    // 2. Fetch all conversations for the Inbox screen
   static Future<List<Map<String, dynamic>>> myConversations() async {
     final uid = _db.auth.currentUser!.id;
     return await _db
         .from('conversations')
-        .select('id, property_id, client_id, owner_id, '
+        // 👇 Added created_at here
+        .select('id, property_id, client_id, owner_id, created_at, '
             'properties(title, images), '
             'client:profiles!conversations_client_id_fkey(full_name), '
             'owner:profiles!conversations_owner_id_fkey(full_name)')

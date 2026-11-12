@@ -16,7 +16,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _avatarUrl;
   bool? _isAdmin;
   String? _email;
-  String? _createdAt;
   bool _loading = true;
   bool _uploadingAvatar = false;
 
@@ -34,7 +33,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) {
       setState(() {
         _email = user.email;
-        _createdAt = user.createdAt.substring(0, 10); // Just the date
         _nameCtrl.text = data['full_name'] ?? '';
         _phoneCtrl.text = data['phone'] ?? '';
         _avatarUrl = data['avatar_url'];
@@ -51,7 +49,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _uploadingAvatar = true);
     try {
       final uid = supabase.auth.currentUser!.id;
-      // Use the existing image service to upload to a user-specific folder
       final urls = await ImageService.uploadAll([file], uid);
       final newAvatarUrl = urls.first;
 
@@ -74,22 +71,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile details saved!')));
   }
 
-  Future<void> _changePassword() async {
-    final ctrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Change Password'),
-        content: TextField(controller: ctrl, obscureText: true, decoration: const InputDecoration(labelText: 'New Password (min 6 chars)')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
-        ],
-      ),
-    );
-    if (ok == true && ctrl.text.length >= 6) {
-      await supabase.auth.updateUser(UserAttributes(password: ctrl.text));
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password updated!')));
+  // 👇 NEW: Sends reset link to email
+  Future<void> _sendPasswordResetEmail() async {
+    if (_email == null) return;
+    try {
+      await supabase.auth.resetPasswordForEmail(_email!);
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Email Sent'),
+            content: Text('A password reset link has been sent to $_email. Please check your inbox.'),
+            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -103,7 +101,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // --- AVATAR ---
             Center(
               child: Stack(
                 children: [
@@ -120,18 +117,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       backgroundColor: Theme.of(context).colorScheme.primary,
                       child: _uploadingAvatar 
                           ? const Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : IconButton(
-                              icon: const Icon(Icons.camera_alt, size: 18, color: Colors.white),
-                              onPressed: _uploadAvatar,
-                            ),
+                          : IconButton(icon: const Icon(Icons.camera_alt, size: 18, color: Colors.white), onPressed: _uploadAvatar),
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
-
-            // --- INFO ROW ---
             Card(
               child: ListTile(
                 leading: const Icon(Icons.email),
@@ -140,31 +132,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 trailing: _isAdmin == true ? const Chip(label: Text('ADMIN', style: TextStyle(fontSize: 10))) : null,
               ),
             ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.calendar_today),
-                title: const Text('Member Since'),
-                subtitle: Text(_createdAt ?? ''),
-              ),
-            ),
             const SizedBox(height: 24),
-
-            // --- EDITABLE FIELDS ---
             TextField(controller: _nameCtrl, decoration: const InputDecoration(labelText: 'Full Name', border: OutlineInputBorder())),
             const SizedBox(height: 16),
             TextField(controller: _phoneCtrl, decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder())),
             const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity, height: 50,
-              child: FilledButton(onPressed: _saveProfile, child: const Text('Save Details')),
-            ),
+            SizedBox(width: double.infinity, height: 50, child: FilledButton(onPressed: _saveProfile, child: const Text('Save Details'))),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity, height: 50,
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.lock),
-                onPressed: _changePassword,
-                label: const Text('Change Password'),
+                onPressed: _sendPasswordResetEmail,
+                label: const Text('Send Password Reset Email'),
               ),
             ),
           ],
