@@ -8,9 +8,13 @@ class PropertyQueryService {
     var q = _db.from('properties').select().eq('is_available', true);
 
     if (f.listingType != null) q = q.eq('listing_type', f.listingType!);
+    
+    // 👇 SEARCH BY NAME, LOCATION, OR PINCODE
     if (f.searchQuery != null && f.searchQuery!.trim().isNotEmpty) {
-      q = q.or('title.ilike.%${f.searchQuery!.trim()}%,city.ilike.%${f.searchQuery!.trim()}%');
+      final term = f.searchQuery!.trim();
+      q = q.or('title.ilike.%$term%,city.ilike.%$term%,pincode.ilike.%$term%');
     }
+    
     if (f.city != null && f.city!.trim().isNotEmpty) q = q.ilike('city', '%${f.city!.trim()}%');
     if (f.minPrice != null) q = q.gte('price_per_month', f.minPrice!);
     if (f.maxPrice != null) q = q.lte('price_per_month', f.maxPrice!);

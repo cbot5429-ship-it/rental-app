@@ -21,10 +21,12 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
   bool _loading = true;
   late PropertyFilter _filter;
   List<Map<String, dynamic>> _compareList = [];
+  final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _searchCtrl.text = widget.initialQuery;
     _filter = PropertyFilter()
       ..listingType = widget.listingType
       ..searchQuery = widget.initialQuery;
@@ -41,6 +43,7 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
+    _filter.searchQuery = _searchCtrl.text;
     final data = await PropertyQueryService.search(_filter);
     if (mounted) setState(() { _properties = data; _loading = false; });
   }
@@ -56,14 +59,32 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
-        title: Text(widget.listingType.toUpperCase() + ' Properties'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: TextField(
+          controller: _searchCtrl,
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) {
+            _load();
+            _saveSearch(_searchCtrl.text);
+          },
+          decoration: InputDecoration(
+            hintText: 'Search locality, name or pincode...',
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            prefixIcon: const Icon(Icons.search, size: 20),
+            contentPadding: const EdgeInsets.symmetric(vertical: 0),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          ),
+        ),
         actions: [
           IconButton(
             icon: Badge(
               isLabelVisible: _filter.activeCount > 0,
               label: Text('${_filter.activeCount}'),
-              child: const Icon(Icons.filter_list),
+              child: const Icon(Icons.tune),
             ),
             onPressed: _openFilters,
           ),
@@ -81,13 +102,15 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
               }
             },
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _properties.isEmpty
-              ? const Center(child: Text('No properties found.'))
+              ? const Center(child: Text('No properties match your search.'))
               : ListView.builder(
+                  padding: const EdgeInsets.only(top: 16, bottom: 32),
                   itemCount: _properties.length,
                   itemBuilder: (context, i) {
                     final p = _properties[i];
@@ -106,9 +129,9 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
                       child: Container(
                         decoration: BoxDecoration(
                           border: isSelected ? Border.all(color: Colors.green, width: 3) : null,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         child: PropertyCard(
                           property: p,
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PropertyDetailScreen(property: p))),

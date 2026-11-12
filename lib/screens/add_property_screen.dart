@@ -15,13 +15,14 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _cityCtrl = TextEditingController();
+  final _pincodeCtrl = TextEditingController(); // 👈 NEW
   final _priceCtrl = TextEditingController();
   final _bedsCtrl = TextEditingController();
   final _bathsCtrl = TextEditingController();
 
   String? _type;
   String? _furnishing;
-  String? _listingType = 'rent'; // Default
+  String? _listingType = 'rent'; 
   List<XFile> _images = [];
   bool _loading = false;
 
@@ -47,12 +48,13 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         'title': _titleCtrl.text.trim(),
         'description': _descCtrl.text.trim(),
         'city': _cityCtrl.text.trim(),
+        'pincode': _pincodeCtrl.text.trim(), // 👈 NEW
         'price_per_month': double.parse(_priceCtrl.text.trim()),
         'bedrooms': int.parse(_bedsCtrl.text.trim()),
         'bathrooms': int.parse(_bathsCtrl.text.trim()),
         'property_type': _type,
         'furnishing': _furnishing,
-        'listing_type': _listingType, // 👈 Save the Buy/Rent/Commercial type
+        'listing_type': _listingType,
         'images': imageUrls,
         'is_available': true,
       });
@@ -123,10 +125,27 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                 validator: (v) => v!.isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _cityCtrl,
-                decoration: const InputDecoration(labelText: 'City / Locality', border: OutlineInputBorder()),
-                validator: (v) => v!.isEmpty ? 'Required' : null,
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextFormField(
+                      controller: _cityCtrl,
+                      decoration: const InputDecoration(labelText: 'City / Locality', border: OutlineInputBorder()),
+                      validator: (v) => v!.isEmpty ? 'Required' : null,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 1,
+                    child: TextFormField(
+                      controller: _pincodeCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Pincode', border: OutlineInputBorder()),
+                      validator: (v) => v!.isEmpty ? 'Required' : null,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               Row(
