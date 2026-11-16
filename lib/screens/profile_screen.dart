@@ -145,20 +145,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // 👇 THEME SWITCHER UI 👇
             Card(
               child: ListTile(
-                leading: const Icon(Icons.palette),
-                title: const Text('App Theme'),
-                subtitle: const Text('Choose Light, Dark, or System default'),
-                trailing: DropdownButton<ThemeMode>(
-                  value: themeNotifier.value,
-                  underline: const SizedBox(),
-                  onChanged: (ThemeMode? newMode) {
-                    if (newMode != null) _changeTheme(newMode);
-                  },
-                  items: const [
-                    DropdownMenuItem(value: ThemeMode.system, child: Text('System')),
-                    DropdownMenuItem(value: ThemeMode.light, child: Text('Light')),
-                    DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark')),
-                  ],
+                leading: const Icon(Icons.palette, color: theme.colorScheme.primary),
+                title: const Text('App Theme', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Choose your preferred theme'),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: DropdownButton<ThemeMode>(
+                    value: themeNotifier.value,
+                    underline: const SizedBox(),
+                    onChanged: (ThemeMode? newMode) {
+                      if (newMode != null) _changeTheme(newMode);
+                    },
+                    items: const [
+                      DropdownMenuItem(value: ThemeMode.system, child: Text('System', style: TextStyle(color: theme.colorScheme.onSurface))),
+                      DropdownMenuItem(value: ThemeMode.light, child: Text('Light', style: TextStyle(color: theme.colorScheme.onSurface))),
+                      DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark', style: TextStyle(color: theme.colorScheme.onSurface))),
+                    ],
+                    icon: const Icon(Icons.expand_more, size: 20, color: theme.colorScheme.onSurfaceVariant),
+                  ),
                 ),
               ),
             ),
