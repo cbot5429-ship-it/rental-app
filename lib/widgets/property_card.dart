@@ -1,11 +1,25 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../services/favorite_service.dart';
+import '../theme/app_theme.dart';
+import 'common/app_card.dart';
+import 'common/app_button.dart';
 
 class PropertyCard extends StatefulWidget {
   final Map<String, dynamic> property;
   final VoidCallback? onTap;
-  const PropertyCard({super.key, required this.property, this.onTap});
+  final VoidCallback? onFavorite;
+  final bool showFavorite;
+  final bool isSelected;
+
+  const PropertyCard({
+    super.key,
+    required this.property,
+    this.onTap,
+    this.onFavorite,
+    this.showFavorite = true,
+    this.isSelected = false,
+  });
 
   @override
   State<PropertyCard> createState() => _PropertyCardState();
@@ -17,7 +31,9 @@ class _PropertyCardState extends State<PropertyCard> {
   @override
   void initState() {
     super.initState();
-    _checkFav();
+    if (widget.showFavorite) {
+      _checkFav();
+    }
   }
 
   Future<void> _checkFav() async {
@@ -32,26 +48,97 @@ class _PropertyCardState extends State<PropertyCard> {
     } catch (_) {
       if (mounted) setState(() => _isFav = !_isFav);
     }
+    widget.onFavorite?.call();
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final propertyTheme = theme.extension<PropertyThemeExtension>()!;
     final images = (widget.property['images'] as List?)?.cast<String>() ?? [];
     final imageUrl = images.isNotEmpty ? images.first : null;
-    final isRent = widget.property['listing_type'] == 'rent';
+    final listingType = widget.property['listing_type'] ?? 'rent';
+    final isRent = listingType == 'rent';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: widget.onTap,
+    return PropertyListCard(
+      property: widget.property,
+      onTap: widget.onTap,
+      onFavorite: _toggleFav,
+      isFavorite: _isFav,
+      isSelected: widget.isSelected,
+    );
+  }
+}
+
+/// Compact property card for horizontal lists
+class PropertyHorizontalCard extends StatelessWidget {
+  final Map<String, dynamic> property;
+  final VoidCallback? onTap;
+  final VoidCallback? onFavorite;
+  final bool isFavorite;
+
+  const PropertyHorizontalCard({
+    super.key,
+    required this.property,
+    this.onTap,
+    this.onFavorite,
+    this.isFavorite = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final propertyTheme = theme.extension<PropertyThemeExtension>()!;
+    final images = (property['images'] as List?)?.cast<String>() ?? [];
+    final imageUrl = images.isNotEmpty ? images.first : null;
+    final listingType = property['listing_type'] ?? 'rent';
+    final isRent = listingType == 'rent';
+
+    return _PropertyHorizontalCard(
+      property: property,
+      imageUrl: imageUrl,
+      isRent: isRent,
+      onTap: onTap,
+      onFavorite: onFavorite,
+      isFavorite: isFavorite,
+      propertyTheme: propertyTheme,
+    );
+  }
+}
+
+class _PropertyHorizontalCard extends StatelessWidget {
+  final Map<String, dynamic> property;
+  final String? imageUrl;
+  final bool isRent;
+  final VoidCallback? onTap;
+  final VoidCallback? onFavorite;
+  final bool isFavorite;
+  final PropertyThemeExtension propertyTheme;
+
+  const _PropertyHorizontalCard({
+    required this.property,
+    required this.imageUrl,
+    required this.isRent,
+    this.onTap,
+    this.onFavorite,
+    this.isFavorite = false,
+    required this.propertyTheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SizedBox(
+      width: 280,
+      child: AppCard.level2(
+        padding: EdgeInsets.zero,
+        clipped: true,
+        onTap: onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Image section with badges
             Stack(
               children: [
                 AspectRatio(
@@ -60,82 +147,140 @@ class _PropertyCardState extends State<PropertyCard> {
                       ? CachedNetworkImage(
                           imageUrl: imageUrl,
                           fit: BoxFit.cover,
+                          width: double.infinity,
                           memCacheWidth: 800,
-                          placeholder: (_, __) => Container(color: Colors.grey.shade200),
-                          errorWidget: (_, __, ___) => Container(color: Colors.grey.shade200, child: const Icon(Icons.home)),
+                          placeholder: (_, __) => Container(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                          errorWidget: (_, __, ___) => Container(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: Icon(Icons.home_work, size: 48, color: theme.colorScheme.onSurfaceVariant),
+                          ),
                         )
-                      : Container(color: Colors.grey.shade200, child: const Icon(Icons.home, size: 48)),
+                      : Container(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          child: Icon(Icons.home_work, size: 48, color: theme.colorScheme.onSurfaceVariant),
+                        ),
                 ),
-                // Type Badge (Buy/Rent)
+                // Type Badge
                 Positioned(
-                  top: 12,
-                  left: 12,
+                  top: AppSpacing.md,
+                  left: AppSpacing.md,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
                     decoration: BoxDecoration(
-                      color: isRent ? Colors.blue.withOpacity(0.9) : Colors.green.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(8),
+                      color: isRent ? propertyTheme.rentColor : propertyTheme.saleColor,
+                      borderRadius: BorderRadius.circular(AppRadius.round),
                     ),
                     child: Text(
-                      isRent ? 'FOR RENT' : 'FOR SALE',
-                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      isRent ? 'RENT' : 'SALE',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
                 // Favorite Button
                 Positioned(
-                  top: 8,
-                  right: 8,
-                  child: CircleAvatar(
-                    backgroundColor: Colors.white.withOpacity(0.9),
-                    child: IconButton(
-                      icon: Icon(_isFav ? Icons.favorite : Icons.favorite_border, color: _isFav ? Colors.red : Colors.grey),
-                      onPressed: _toggleFav,
+                  top: AppSpacing.md,
+                  right: AppSpacing.md,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: onFavorite,
+                      borderRadius: BorderRadius.circular(AppRadius.circle),
+                      child: Container(
+                        padding: const EdgeInsets.all(AppSpacing.sm),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          shape: BoxShape.circle,
+                          boxShadow: AppElevation.level1,
+                        ),
+                        child: Icon(
+                          isFavorite ? Icons.favorite : Icons.favorite_border,
+                          color: isFavorite ? Colors.red : theme.colorScheme.onSurface,
+                          size: 18,
+                        ),
+                      ),
                     ),
                   ),
                 ),
+                // Image count indicator
+                if ((property['images'] as List?)?.length ?? 0 > 1)
+                  Positioned(
+                    bottom: AppSpacing.md,
+                    right: AppSpacing.md,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(AppRadius.round),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.photo_library, color: Colors.white, size: 12),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${(property['images'] as List).length}',
+                            style: theme.textTheme.labelSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
+            // Content section
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpacing.md),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    property['title'] ?? '',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      Icon(Icons.location_on_outlined, size: 12, color: theme.colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          widget.property['title'] ?? '', 
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold), 
-                          maxLines: 1, 
-                          overflow: TextOverflow.ellipsis
+                          property['city'] ?? '',
+                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Text(
-                        '₹${widget.property['price_per_month']}',
-                        style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w900, fontSize: 18),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on, size: 16, color: Colors.grey),
-                      const SizedBox(width: 4),
-                      Expanded(child: Text('${widget.property['city']} - ${widget.property['pincode'] ?? ""}', style: const TextStyle(color: Colors.grey, fontSize: 14))),
-                    ],
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    _formatPrice(property['price_per_month']),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: propertyTheme.priceColor,
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  const Divider(height: 1),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.sm),
                   Row(
                     children: [
-                      _featureIcon(Icons.bed, '${widget.property['bedrooms']} Beds'),
-                      const SizedBox(width: 16),
-                      _featureIcon(Icons.bathtub, '${widget.property['bathrooms']} Baths'),
-                      const Spacer(),
-                      Text('${widget.property['property_type']}', style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w600)),
+                      _FeatureChip(icon: Icons.bed_outlined, label: '${property['bedrooms'] ?? 0} Beds'),
+                      const SizedBox(width: AppSpacing.md),
+                      _FeatureChip(icon: Icons.bathtub_outlined, label: '${property['bathrooms'] ?? 0} Baths'),
                     ],
                   ),
                 ],
@@ -147,12 +292,28 @@ class _PropertyCardState extends State<PropertyCard> {
     );
   }
 
-  Widget _featureIcon(IconData icon, String text) {
+  String _formatPrice(dynamic price) {
+    if (price == null) return '₹0';
+    final numPrice = price is num ? price : num.tryParse(price.toString()) ?? 0;
+    return '₹${numPrice.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
+  }
+}
+
+class _FeatureChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _FeatureChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 18, color: Colors.grey.shade600),
+        Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
         const SizedBox(width: 4),
-        Text(text, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+        Text(label, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
       ],
     );
   }

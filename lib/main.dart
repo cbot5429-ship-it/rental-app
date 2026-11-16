@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/auth_screens.dart';
 import 'screens/home_screen.dart';
+import 'theme/app_theme.dart';
 
 // 👇 Global Notifier: The app will listen to this to know when to switch themes
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
@@ -38,20 +39,11 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           title: 'Rental App',
           debugShowCheckedModeBanner: false,
-          
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple, brightness: Brightness.light),
-            useMaterial3: true,
-            scaffoldBackgroundColor: Colors.grey.shade50,
-          ),
-          
-          darkTheme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple, brightness: Brightness.dark),
-            useMaterial3: true,
-            scaffoldBackgroundColor: const Color(0xFF121212),
-            cardColor: const Color(0xFF1E1E1E),
-          ),
-          
+
+          theme: buildLightTheme(),
+
+          darkTheme: buildDarkTheme(),
+
           themeMode: currentMode, // Apply the current theme
           home: const AuthGate(),
         );
