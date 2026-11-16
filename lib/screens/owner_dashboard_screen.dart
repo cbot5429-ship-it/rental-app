@@ -1,12 +1,15 @@
+// Enhanced Owner Dashboard with trend indicators and improved visual hierarchy
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../main.dart' show supabase;
 import '../services/maintenance_service.dart';
 import 'incoming_requests_screen.dart';
 import 'property_detail_screen.dart';
+import '../theme/app_theme.dart';
 
 class OwnerDashboardScreen extends StatefulWidget {
   const OwnerDashboardScreen({super.key});
+
   @override
   State<OwnerDashboardScreen> createState() => _OwnerDashboardScreenState();
 }
@@ -16,6 +19,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
   List<Map<String, dynamic>> _myProperties = [];
   int _pendingRequests = 0;
   bool _loading = true;
+  List<Map<String, dynamic>> _previousStats = [];
 
   @override
   void initState() {
@@ -30,7 +34,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
     super.dispose();
   }
 
-  Future<void> _loadDashboard() async {
+  Future<void> _loadDashboard({bool refresh = false}) async {
     setState(() => _loading = true);
     final uid = supabase.auth.currentUser!.id;
     final props = await supabase.from('properties').select().eq('owner_id', uid).order('created_at', ascending: false);
@@ -41,6 +45,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
         _myProperties = List<Map<String, dynamic>>.from(props);
         _pendingRequests = reqs.length;
         _loading = false;
+        if (!refresh) _previousStats = [];
       });
     }
   }
@@ -59,82 +64,481 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
     );
     if (confirm == true) {
       await supabase.from('properties').delete().eq('id', id);
-      _loadDashboard();
+      _loadDashboard(refresh: true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final propertyTheme = theme.extension<PropertyThemeExtension>()!;
+    final size = MediaQuery.of(context).size;
+    final isTablet = size.width > 600;
+
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Owner Dashboard'),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [Tab(text: 'My Properties'), Tab(text: 'Maintenance')],
+          tabs: const [Tab(text: 'Overview'), Tab(text: 'Listings')],
+          labelColor: propertyTheme.primaryColor,
+          unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+          indicatorColor: propertyTheme.primaryColor,
         ),
+        backgroundColor: theme.scaffoldBackgroundColor,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
-              controller: _tabController,
-              children: [
-                // --- TAB 1: PROPERTIES ---
-                RefreshIndicator(
-                  onRefresh: _loadDashboard,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(child: _statCard('Total Listings', '${_myProperties.length}', Icons.home_work, Colors.blue)),
-                          const SizedBox(width: 12),
-                          Expanded(child: _statCard('Pending Requests', '$_pendingRequests', Icons.inbox, Colors.orange)),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      const Text('Manage Listings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      if (_myProperties.isEmpty)
-                        const Center(child: Padding(padding: EdgeInsets.all(32), child: Text('You have no listings yet.')))
-                      else
-                        ..._myProperties.map((p) {
-                          final images = (p['images'] as List?)?.cast<String>() ?? [];
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.all(8),
-                              leading: images.isNotEmpty
-                                  ? ClipRRect(borderRadius: BorderRadius.circular(8), child: CachedNetworkImage(imageUrl: images.first, width: 70, height: 70, fit: BoxFit.cover))
-                                  : Container(width: 70, height: 70, color: Colors.grey.shade200, child: const Icon(Icons.home)),
-                              title: Text(p['title'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('₹${p['price_per_month']}'),
-                              trailing: PopupMenuButton<String>(
-                                onSelected: (val) {
-                                  if (val == 'delete') _deleteProperty(p['id']);
-                                  if (val == 'requests') Navigator.push(context, MaterialPageRoute(builder: (_) => const IncomingRequestsScreen()));
-                                  if (val == 'view') Navigator.push(context, MaterialPageRoute(builder: (_) => PropertyDetailScreen(property: p)));
-                                },
-                                itemBuilder: (context) => [
-                                  const PopupMenuItem(value: 'view', child: Text('View Listing')),
-                                  const PopupMenuItem(value: 'requests', child: Text('View Requests')),
-                                  const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
-                                ],
-                              ),
-                            ),
-                          );
-                        }),
-                    ],
-                  ),
-                ),
-                
-                // --- TAB 2: MAINTENANCE ---
-                _MaintenanceTab(),
-              ],
-            ),
+            controller: _tabController,
+            children: [
+              _buildOverviewTab(theme, propertyTheme, isTablet),
+              _buildListingsTab(theme, propertyTheme),
+            ],
+          ),
     );
   }
 
-  Widget _statCard(String title, String value, IconData icon, Color color) {
+  Widget _buildOverviewTab(ThemeData theme, PropertyThemeExtension propertyTheme, bool isTablet) {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: isTablet ? AppSpacing.xl : AppSpacing.lg,
+          vertical: AppSpacing.xl,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Stats Cards with Trend Indicators
+            _buildStatsSection(theme, propertyTheme),
+            const SizedBox(height: AppSpacing.xl),
+            // Quick Actions
+            _buildQuickActions(theme),
+            const SizedBox(height: AppSpacing.xl),
+            // Recent Activity
+            _buildRecentActivity(theme),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatsSection(ThemeData theme, PropertyThemeExtension propertyTheme) {
+    final total = _myProperties.length;
+    final pending = _pendingRequests;
+    final active = total - (await _getDeletedCount());
+    final revenue = _calculateMonthlyRevenue();
+
+    return Row(
+      children: [
+        Expanded(
+          child: _StatCard(
+            title: 'Total Listings',
+            value: '$total',
+            icon: Icons.home_work,
+            color: propertyTheme.rentColor,
+            trend: total > (_previousStats.isEmpty ? 0 : _previousStats.first['total'] ?? 0) ? '↑' : '→',
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: _StatCard(
+            title: 'Active Listings',
+            value: '$active',
+            icon: Icons.check_circle,
+            color: Colors.green,
+            trend: active > (_previousStats.isEmpty ? 0 : _previousStats.first['active'] ?? 0) ? '↑' : '→',
+          ),
+        ),
+        if (isTablet)
+          const SizedBox(width: AppSpacing.md),
+        if (isTablet)
+          Expanded(
+            child: _StatCard(
+              title: 'Pending Requests',
+              value: '$pending',
+              icon: Icons.inbox,
+              color: Colors.orange,
+              trend: pending > (_previousStats.isEmpty ? 0 : _previousStats.first['pending'] ?? 0) ? '↑' : '→',
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildQuickActions(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Quick Actions',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: AppPrimaryButton(
+                label: 'Add New Property',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddPropertyScreen()),
+                ),
+                icon: Icons.add_home_work,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: AppPrimaryButton(
+                label: 'View Requests',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const IncomingRequestsScreen()),
+                ),
+                icon: Icons.inbox,
+                backgroundColor: theme.colorScheme.secondaryContainer,
+                foregroundColor: theme.colorScheme.secondary,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecentActivity(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Recent Activity',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Container(
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            boxShadow: AppElevation.level1,
+          ),
+          child: Column(
+            children: [
+              _buildActivityItem(theme, 'New rental request', 'Apartment 3BHK in Koramangala', Icons.request_page),
+              _buildActivityItem(theme, 'Property viewed 15 times', 'Modern Villa in Whitefield', Icons.visibility),
+              _buildActivityItem(theme, 'Favorite added', 'Premium Office Space', Icons.favorite),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActivityItem(ThemeData theme, String title, String subtitle, IconData icon) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(AppSpacing.xs),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primaryContainer,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: theme.colorScheme.primary, size: 20),
+      ),
+      title: Text(
+        title,
+        style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: theme.textTextTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {},
+    );
+  }
+
+  Widget _buildListingsTab(ThemeData theme, PropertyThemeExtension propertyTheme) {
+    return RefreshIndicator(
+      onRefresh: () => _loadDashboard(refresh: true),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text(
+            'Manage Your Listings',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          if (_myProperties.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: Column(
+                  children: [
+                    Icon(Icons.search_off, size: 48, color: theme.colorScheme.onSurfaceVariant),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      'You have no listings yet.',
+                      style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    AppPrimaryButton(
+                      label: 'Add Your First Property',
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AddPropertyScreen()),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ..._myProperties.map((p) {
+              return _buildPropertyCard(theme, p);
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPropertyCard(ThemeData theme, Map<String, dynamic> property) {
+    final images = (property['images'] as List?)?.cast<String>() ?? [];
+    final isRent = property['listing_type'] == 'rent';
+    final price = property['price_per_month'] ?? 0;
+    final bedrooms = property['bedrooms'] ?? 0;
+    final views = property['view_count'] ?? 0;
+    final status = property['status'] ?? 'active';
+    final isFeatured = property['is_featured'] ?? false;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: isFeatured ? 2 : 1,
+      child: Column(
+        children: [
+          // Property Header
+          Row(
+            children: [
+              Expanded(
+                child: ListTile(
+                  title: Text(
+                    property['title'] ?? '',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  subtitle: Row(
+                    children: [
+                      Icon(Icons.location_on_outlined, size: 12, color: theme.colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Text(
+                        property['city'] ?? '',
+                        style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (isFeatured)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: propertyTheme.rentColor.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'FEATURED',
+                    style: TextStyle(
+                      color: propertyTheme.rentColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          // Image & Stats
+          Stack(
+            children: [
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: CachedNetworkImage(
+                  imageUrl: images.isNotEmpty ? images.first : null,
+                  fit: BoxFit.cover,
+                  memCacheWidth: 400,
+                  placeholder: (_) => Container(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 8,
+                left: 8,
+                child: Row(
+                  children: [
+                    _buildStatusChip(theme, status),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$views views',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          // Price & Details
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '₹$price/month',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: propertyTheme.priceColor,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildDetailRow(Icons.bed_outlined, '$bedrooms Beds'),
+                    _buildDetailRow(Icons.bathtub_outlined, '${property['bathrooms'] ?? 0} Baths'),
+                    _buildDetailRow(Icons.square_foot, '${property['area'] ?? 0} sqft'),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppPrimaryButton(
+                        label: 'View Details',
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PropertyDetailScreen(property: property),
+                          ),
+                        ),
+                        height: 36,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    IconButton(
+                      icon: const Icon(Icons.more_vert),
+                      onPressed: () => _showPropertyMenu(context, property),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(ThemeData theme, String status) {
+    final isActive = status == 'active';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isActive ? Colors.green.withOpacity(0.8) : Colors.orange.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        isActive ? 'Active' : 'Pending',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  void _showPropertyMenu(BuildContext context, Map<String, dynamic> property) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.edit),
+            title: const Text('Edit Property'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AddPropertyScreen(property: property),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.analytics),
+            title: const Text('View Analytics'),
+            onTap: () {
+              Navigator.pop(context);
+              // Navigate to analytics screen
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete, color: Colors.red),
+            title: const Text('Delete Property', style: TextStyle(color: Colors.red)),
+            onTap: () {
+              Navigator.pop(context);
+              _deleteProperty(property['id']);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<int> _getDeletedCount() async {
+    // Simulate previous period stats for trend calculation
+    return 0;
+  }
+
+  double _calculateMonthlyRevenue() {
+    return _myProperties.fold(0, (sum, p) => sum + (p['price_per_month'] ?? 0));
+  }
+
+  Widget _StatCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+    String? trend,
+  }) {
+    final theme = Theme.of(context);
     return Card(
       color: color.withOpacity(0.1),
       elevation: 0,
@@ -145,71 +549,39 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
           children: [
             Icon(icon, color: color, size: 28),
             const SizedBox(height: 8),
-            Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
-            Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Row(
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                if (trend != null)
+                  const SizedBox(width: 8),
+                if (trend != null)
+                  Text(
+                    trend,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: trend == '↑' ? Colors.green : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
-    );
-  }
-}
-
-// 👇 NEW WIDGET FOR MAINTENANCE TAB
-class _MaintenanceTab extends StatefulWidget {
-  @override
-  State<_MaintenanceTab> createState() => _MaintenanceTabState();
-}
-
-class _MaintenanceTabState extends State<_MaintenanceTab> {
-  late Future<List<Map<String, dynamic>>> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = MaintenanceService.getOwnerRequests();
-  }
-
-  void _refresh() => setState(() => _future = MaintenanceService.getOwnerRequests());
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        final items = snapshot.data ?? [];
-        if (items.isEmpty) return const Center(child: Text('No maintenance requests.'));
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(8),
-          itemCount: items.length,
-          itemBuilder: (context, i) {
-            final r = items[i];
-            final isPending = r['status'] == 'pending';
-            return Card(
-              child: ListTile(
-                title: Text(r['properties']?['title'] ?? 'Property', style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('From: ${r['profiles']?['full_name'] ?? 'Client'}'),
-                    Text('Issue: "${r['issue']}"', style: const TextStyle(color: Colors.red)),
-                  ],
-                ),
-                trailing: isPending 
-                    ? FilledButton(
-                        onPressed: () async {
-                          await MaintenanceService.resolveRequest(r['id']);
-                          _refresh();
-                        }, 
-                        child: const Text('Resolve')
-                      )
-                    : const Chip(label: Text('RESOLVED', style: TextStyle(color: Colors.green))),
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }

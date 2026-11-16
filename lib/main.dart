@@ -3,6 +3,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/auth_screens.dart';
 import 'screens/home_screen.dart';
+import 'screens/property_list_screen.dart';
+import 'screens/property_detail_screen.dart';
+import 'screens/favorites_screen.dart';
+import 'screens/inbox_screen.dart';
+import 'screens/profile_screen.dart';
+import 'screens/owner_dashboard_screen.dart';
+import 'screens/compare_screen.dart';
 import 'theme/app_theme.dart';
 
 // 👇 Global Notifier: The app will listen to this to know when to switch themes
@@ -46,6 +53,20 @@ class MyApp extends StatelessWidget {
 
           themeMode: currentMode, // Apply the current theme
           home: const AuthGate(),
+          routes: {
+            '/property_list': (context) => const PropertyListScreen(
+              initialQuery: '',
+              listingType: 'rent',
+            ),
+            '/compare': (context) => const CompareScreen(
+              properties: const [],
+              initialQuery: '',
+              listingType: 'rent',
+            ),
+            '/property_detail': (context) => const PropertyDetailScreen(
+              property: null,
+            ),
+          },
         );
       },
     );
@@ -68,4 +89,45 @@ class AuthGate extends StatelessWidget {
       },
     );
   }
+}
+
+// Bottom navigation configuration
+class _BottomNav {
+  static const List<BottomNavigationBarItem> items = [
+    BottomNavigationBarItem(
+      icon: Icon(Icons.home_outlined),
+      activeIcon: Icon(Icons.home),
+      label: 'Home',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.search_outlined),
+      activeIcon: Icon(Icons.search),
+      label: 'Search',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.favorite_outline),
+      activeIcon: Icon(Icons.favorite),
+      label: 'Favorites',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.message_outlined),
+      activeIcon: Icon(Icons.message),
+      label: 'Inbox',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.person_outline),
+      activeIcon: Icon(Icons.person),
+      label: 'Profile',
+    ),
+  ];
+
+  static const List<Widget> screens = [
+    HomeScreen(),
+    PropertyListScreen(initialQuery: '', listingType: 'rent'),
+    CompareScreen(initialQuery: '', listingType: 'rent'),
+    OwnerDashboardScreen(),
+    FavoritesScreen(),
+    InboxScreen(),
+    ProfileScreen(),
+  ];
 }
