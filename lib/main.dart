@@ -8,11 +8,9 @@ import 'screens/property_detail_screen.dart';
 import 'screens/favorites_screen.dart';
 import 'screens/inbox_screen.dart';
 import 'screens/profile_screen.dart';
-import 'screens/owner_dashboard_screen.dart';
-import 'screens/compare_screen.dart';
 import 'theme/app_theme.dart';
 
-// 👇 Global Notifier: The app will listen to this to know when to switch themes
+// Global Notifier: The app will listen to this to know when to switch themes
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
 
 Future<void> main() async {
@@ -23,7 +21,7 @@ Future<void> main() async {
     anonKey: 'sb_publishable_1NZ66jkf6WF2vrB9p3mT5A__kxWLRme',
   );
 
-  // 👇 Load the saved theme from the user's device
+  // Load the saved theme from the user's device
   final prefs = await SharedPreferences.getInstance();
   final savedTheme = prefs.getString('app_theme');
   if (savedTheme == 'light') themeNotifier.value = ThemeMode.light;
@@ -39,7 +37,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 👇 Listen to the theme changes and rebuild the app
+    // Listen to the theme changes and rebuild the app
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
       builder: (context, currentMode, _) {
@@ -48,24 +46,18 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
 
           theme: buildLightTheme(),
-
           darkTheme: buildDarkTheme(),
-
-          themeMode: currentMode, // Apply the current theme
+          themeMode: currentMode,
           home: const AuthGate(),
           routes: {
             '/property_list': (context) => const PropertyListScreen(
               initialQuery: '',
               listingType: 'rent',
             ),
-            '/compare': (context) => const CompareScreen(
-              properties: const [],
-              initialQuery: '',
-              listingType: 'rent',
-            ),
             '/property_detail': (context) => const PropertyDetailScreen(
-              property: null,
+              property: null, // This will be overridden
             ),
+            '/add_property': (context) => const AddPropertyScreen(),
           },
         );
       },
@@ -81,12 +73,39 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<AuthState>(
       stream: supabase.auth.onAuthStateChange,
       builder: (context, snapshot) {
-        final session = snapshot.data?.session;
+        // Fall back to the session restored at startup so a signed-in user does
+        // not see the login screen flash while the auth stream warms up.
+        final session = snapshot.data?.session ?? supabase.auth.currentSession;
         if (session != null) {
-          return const HomeScreen();
+          return const MainShell();
         }
         return const LoginScreen();
       },
+    );
+  }
+}
+
+/// App shell that holds the persistent bottom navigation and the tab screens.
+class MainShell extends StatefulWidget {
+  const MainShell({super.key});
+
+  @override
+  State<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<MainShell> {
+  int _index = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _BottomNav.screens[_index],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _index,
+        type: BottomNavigationBarType.fixed,
+        onTap: (index) => setState(() => _index = index),
+        items: _BottomNav.items,
+      ),
     );
   }
 }
@@ -121,13 +140,12 @@ class _BottomNav {
     ),
   ];
 
-  static const List<Widget> screens = [
-    HomeScreen(),
-    PropertyListScreen(initialQuery: '', listingType: 'rent'),
-    CompareScreen(initialQuery: '', listingType: 'rent'),
-    OwnerDashboardScreen(),
-    FavoritesScreen(),
-    InboxScreen(),
-    ProfileScreen(),
+  /// One screen per item in [items], in the same order.
+  static final List<Widget> screens = [
+    const HomeScreen(),
+    const PropertyListScreen(initialQuery: '', listingType: 'rent'),
+    const FavoritesScreen(),
+    const InboxScreen(),
+    const ProfileScreen(),
   ];
 }

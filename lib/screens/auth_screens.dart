@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart' show supabase;
 import '../widgets/common/app_button.dart';
 import '../widgets/common/app_text_field.dart';
+import '../widgets/common/app_card.dart';
 import '../theme/app_theme.dart';
 
 // ============================================================
@@ -20,7 +21,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   bool _loading = false;
-  bool _obscurePassword = true;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -116,7 +116,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final size = MediaQuery.of(context).size;
     final isTablet = size.width > 600;
 
@@ -459,8 +458,6 @@ class _SignUpScreenState extends State<SignUpScreen> with SingleTickerProviderSt
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
   bool _loading = false;
-  bool _obscurePassword = true;
-  bool _obscureConfirm = true;
   bool _agreeToTerms = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -851,6 +848,7 @@ class _SignUpScreenState extends State<SignUpScreen> with SingleTickerProviderSt
               prefixIcon: Icons.lock_outline,
               textInputAction: TextInputAction.done,
               autofillHints: const [AutofillHints.newPassword],
+              onChanged: (value) => setState(() {}),
               validator: (value) {
                 if (value == null || value.isEmpty) return 'Please confirm password';
                 if (value != _passCtrl.text) return 'Passwords do not match';

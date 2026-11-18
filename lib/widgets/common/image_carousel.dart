@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:async';
 import '../../theme/app_theme.dart';
 
 /// A full-screen image carousel with page indicator and navigation
@@ -238,7 +239,6 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final enabled = onPressed != null;
 
     return Material(

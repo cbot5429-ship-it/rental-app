@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
 
 /// A consistent text field with label, hint, prefix/suffix icons, and validation
@@ -28,6 +29,7 @@ class AppTextField extends StatelessWidget {
   final AutovalidateMode autovalidateMode;
   final FocusNode? focusNode;
   final Iterable<String>? autofillHints;
+  final bool autofocus;
 
   const AppTextField({
     super.key,
@@ -56,6 +58,7 @@ class AppTextField extends StatelessWidget {
     this.autovalidateMode = AutovalidateMode.onUserInteraction,
     this.focusNode,
     this.autofillHints,
+    this.autofocus = false,
   });
 
   @override
@@ -80,6 +83,7 @@ class AppTextField extends StatelessWidget {
       textCapitalization: textCapitalization,
       autovalidateMode: autovalidateMode,
       autofillHints: autofillHints,
+      autofocus: autofocus,
       style: theme.textTheme.bodyLarge,
       decoration: InputDecoration(
         labelText: label,
@@ -133,11 +137,33 @@ class _AppSearchFieldState extends State<AppSearchField> {
   void initState() {
     super.initState();
     _focusNode = FocusNode();
-    _focusNode.addListener(() => setState(() => _hasFocus = _focusNode.hasFocus));
+    _focusNode.addListener(_handleFocusChange);
+    // The clear button depends on the controller's text, which changes without
+    // this widget rebuilding (typing, programmatic clear).
+    widget.controller.addListener(_handleTextChange);
+  }
+
+  @override
+  void didUpdateWidget(covariant AppSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_handleTextChange);
+      widget.controller.addListener(_handleTextChange);
+    }
+  }
+
+  void _handleFocusChange() {
+    if (mounted) setState(() => _hasFocus = _focusNode.hasFocus);
+  }
+
+  void _handleTextChange() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_handleTextChange);
+    _focusNode.removeListener(_handleFocusChange);
     _focusNode.dispose();
     super.dispose();
   }
@@ -146,9 +172,9 @@ class _AppSearchFieldState extends State<AppSearchField> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Focus(
-      focusNode: _focusNode,
-      child: AnimatedContainer(
+    // The TextField owns _focusNode; wrapping it in a Focus with the same node
+    // re-parents the node into itself and throws at build time.
+    return AnimatedContainer(
         duration: AppDuration.fast,
         curve: AppCurves.standard,
         decoration: BoxDecoration(
@@ -250,7 +276,6 @@ class _AppSearchFieldState extends State<AppSearchField> {
               ),
           ],
         ),
-      ),
     );
   }
 }
@@ -267,6 +292,8 @@ class AppPasswordField extends StatefulWidget {
   final TextInputAction? textInputAction;
   final bool enabled;
   final bool autofocus;
+  final IconData? prefixIcon;
+  final Iterable<String>? autofillHints;
 
   const AppPasswordField({
     super.key,
@@ -280,6 +307,8 @@ class AppPasswordField extends StatefulWidget {
     this.textInputAction,
     this.enabled = true,
     this.autofocus = false,
+    this.prefixIcon,
+    this.autofillHints,
   });
 
   @override
@@ -291,21 +320,20 @@ class _AppPasswordFieldState extends State<AppPasswordField> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return AppTextField(
       controller: widget.controller,
       label: widget.label,
       hint: widget.hint,
       helperText: widget.helperText,
       errorText: widget.errorText,
-      prefixIcon: Icons.lock_outline,
+      prefixIcon: widget.prefixIcon ?? Icons.lock_outline,
       obscureText: _obscure,
       enabled: widget.enabled,
       textInputAction: widget.textInputAction,
       onChanged: widget.onChanged,
       validator: widget.validator,
       autofocus: widget.autofocus,
+      autofillHints: widget.autofillHints,
       suffixIcon: IconButton(
         icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, size: 20),
         onPressed: () => setState(() => _obscure = !_obscure),
@@ -321,6 +349,7 @@ class AppOtpField extends StatefulWidget {
   final ValueChanged<String>? onCompleted;
   final ValueChanged<String>? onChanged;
   final Duration? autoFocusDelay;
+  final Iterable<String>? autofillHints;
 
   const AppOtpField({
     super.key,
@@ -328,6 +357,7 @@ class AppOtpField extends StatefulWidget {
     this.onCompleted,
     this.onChanged,
     this.autoFocusDelay,
+    this.autofillHints,
   });
 
   @override
@@ -336,20 +366,28 @@ class AppOtpField extends StatefulWidget {
 
 class _AppOtpFieldState extends State<AppOtpField> {
   late List<TextEditingController> _controllers;
+  late TextInputType _keyboardType;
   late List<FocusNode> _focusNodes;
   String _code = '';
 
   @override
   void initState() {
     super.initState();
+    _keyboardType = widget.autofillHints?.contains(AutofillHints.oneTimeCode) ?? false
+        ? TextInputType.number
+        : TextInputType.text;
     _controllers = List.generate(widget.length, (_) => TextEditingController());
     _focusNodes = List.generate(widget.length, (_) => FocusNode());
   }
 
   @override
   void dispose() {
-    for (final c in _controllers) c.dispose();
-    for (final f in _focusNodes) f.dispose();
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    for (final f in _focusNodes) {
+      f.dispose();
+    }
     super.dispose();
   }
 
@@ -388,7 +426,7 @@ class _AppOtpFieldState extends State<AppOtpField> {
             controller: _controllers[index],
             focusNode: _focusNodes[index],
             textAlign: TextAlign.center,
-            keyboardType: TextInputType.number,
+            keyboardType: _keyboardType,
             maxLength: 1,
             style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
             decoration: InputDecoration(

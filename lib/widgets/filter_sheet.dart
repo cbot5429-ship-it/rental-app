@@ -5,23 +5,19 @@ import '../widgets/common/app_button.dart';
 import '../theme/app_theme.dart';
 
 class FilterSheet {
-  static final GlobalKey<FilterSheetState> _key = GlobalKey<FilterSheetState>();
-
-  static final _FilterSheetState? get currentState => _key.currentState;
-
   static Future<PropertyFilter?> show(BuildContext context, PropertyFilter current) {
     return showModalBottomSheet<PropertyFilter>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => _FilterSheet(initial: current, key: _key),
+      builder: (_) => _FilterSheet(initial: current),
     );
   }
 }
 
 class _FilterSheet extends StatefulWidget {
   final PropertyFilter initial;
-  const _FilterSheet({required this.initial, super.key});
+  const _FilterSheet({required this.initial});
 
   @override
   State<_FilterSheet> createState() => _FilterSheetState();
@@ -30,17 +26,26 @@ class _FilterSheet extends StatefulWidget {
 class _FilterSheetState extends State<_FilterSheet> {
   late final PropertyFilter f;
   late final TextEditingController cityCtrl;
+  late final TextEditingController bedsCtrl;
+  late final TextEditingController typeCtrl;
   late RangeValues priceRange;
   int bedrooms = 0;
   String? propertyType;
 
   void saveState() {
+    final city = cityCtrl.text.trim();
+    // Carry over everything this sheet does not edit (sort order, furnishing,
+    // min bathrooms) so applying filters does not silently reset them.
     final output = PropertyFilter()
       ..listingType = f.listingType
       ..searchQuery = f.searchQuery
-      ..city = cityCtrl.text
+      ..sortOrder = f.sortOrder
+      ..city = city.isEmpty ? null : city
+      ..minPrice = priceRange.start > 0 ? priceRange.start : null
       ..maxPrice = priceRange.end < 500000 ? priceRange.end : null
       ..minBedrooms = bedrooms > 0 ? bedrooms : null
+      ..minBathrooms = f.minBathrooms
+      ..furnishing = f.furnishing
       ..propertyType = propertyType;
     Navigator.pop(context, output);
   }
@@ -51,7 +56,14 @@ class _FilterSheetState extends State<_FilterSheet> {
       priceRange = const RangeValues(0, 500000);
       bedrooms = 0;
       propertyType = null;
+      _syncDisplay();
     });
+  }
+
+  /// Keeps the read-only display fields in step with the selected values.
+  void _syncDisplay() {
+    bedsCtrl.text = bedrooms > 0 ? 'At least $bedrooms bedrooms' : '';
+    typeCtrl.text = propertyType ?? 'Any type';
   }
 
   @override
@@ -59,14 +71,19 @@ class _FilterSheetState extends State<_FilterSheet> {
     super.initState();
     f = widget.initial;
     cityCtrl = TextEditingController(text: f.city ?? '');
+    bedsCtrl = TextEditingController();
+    typeCtrl = TextEditingController();
     priceRange = RangeValues(f.minPrice ?? 0, f.maxPrice ?? 500000);
     bedrooms = f.minBedrooms ?? 0;
     propertyType = f.propertyType;
+    _syncDisplay();
   }
 
   @override
   void dispose() {
     cityCtrl.dispose();
+    bedsCtrl.dispose();
+    typeCtrl.dispose();
     super.dispose();
   }
 
@@ -144,7 +161,7 @@ class _FilterSheetState extends State<_FilterSheet> {
 
           // Bedrooms
           AppTextField(
-            controller: TextEditingController(text: bedrooms > 0 ? 'At least $bedrooms bedrooms' : ''),
+            controller: bedsCtrl,
             label: 'Min Bedrooms',
             hint: 'No minimum',
             prefixIcon: Icons.bed_outlined,
@@ -155,7 +172,7 @@ class _FilterSheetState extends State<_FilterSheet> {
 
           // Property Type
           AppTextField(
-            controller: TextEditingController(text: propertyType ?? 'Any type'),
+            controller: typeCtrl,
             label: 'Property Type',
             hint: 'Select type',
             prefixIcon: Icons.apartment_outlined,
@@ -202,6 +219,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                   selected: isSelected,
                   onTap: () {
                     setState(() => bedrooms = n);
+                    _syncDisplay();
                     Navigator.pop(ctx);
                   },
                 );
@@ -240,7 +258,7 @@ class _FilterSheetState extends State<_FilterSheet> {
               children: const [
                 Segmented<String>(value: 'Apartment', label: 'Apartment', icon: Icons.build_circle_outlined),
                 Segmented<String>(value: 'Gated Society', label: 'Gated Society', icon: Icons.home_work_outlined),
-                Segmented<String>(value: 'Gated Community Villa', label: 'Gated Community Villa', icon: Icons villa_outlined),
+                Segmented<String>(value: 'Gated Community Villa', label: 'Gated Community Villa', icon: Icons.villa_outlined),
                 Segmented<String>(value: 'Independent House/Villa', label: 'Independent House/Villa', icon: Icons.house_outlined),
               ].map((segment) {
                 final isSelected = propertyType == segment.value;
@@ -252,6 +270,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                     setState(() {
                       propertyType = propertyType == segment.value ? null : segment.value;
                     });
+                    _syncDisplay();
                     Navigator.pop(ctx);
                   },
                 );

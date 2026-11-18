@@ -1,25 +1,33 @@
 // Enhanced Compare Screen with side-by-side property cards and modern UI
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../models/property_filter.dart';
+import '../services/property_query_service.dart';
 import '../theme/app_theme.dart';
 import 'property_detail_screen.dart';
 import 'compare_results_screen.dart';
+import 'property_list_screen.dart';
+import '../widgets/filter_sheet.dart';
+import '../widgets/common/app_card.dart';
+import '../widgets/common/app_button.dart';
+import '../widgets/common/app_text_field.dart';
 
 class CompareScreen extends StatefulWidget {
   final List<Map<String, dynamic>> properties;
   final String initialQuery;
   final String listingType;
-  const CompareScreen({super.key, required this.properties, required this.initialQuery, required this.listingType});
+  const CompareScreen({super.key, this.properties = const [], required this.initialQuery, required this.listingType});
 
   @override
   State<CompareScreen> createState() => _CompareScreenState();
 }
 
-class _CompareScreen extends State<CompareScreen> {
+class _CompareScreenState extends State<CompareScreen> {
   late List<Map<String, dynamic>> _properties;
   late PropertyFilter _filter;
   int _currentImageIndex = 0;
   final PageController _imageController = PageController();
+  final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -29,9 +37,7 @@ class _CompareScreen extends State<CompareScreen> {
     _filter = PropertyFilter()
       ..listingType = widget.listingType
       ..searchQuery = widget.initialQuery;
-    if (_properties.length > 1) {
-      _imageController.addListener(_syncImageIndex);
-    }
+    _searchCtrl.text = widget.initialQuery;
     // Initialize with first property images if available
     if (_properties.isNotEmpty) {
       final images = (_properties.first['images'] as List?)?.cast<String>() ?? [];
@@ -44,13 +50,8 @@ class _CompareScreen extends State<CompareScreen> {
   @override
   void dispose() {
     _imageController.dispose();
+    _searchCtrl.dispose();
     super.dispose();
-  }
-
-  void _syncImageIndex() {
-    if (_imageController.hasClients && _imageController.position.isScrolling) {
-      _imageController.position.notifyListeners();
-    }
   }
 
   void _navigateToDetail(int index) {
@@ -63,7 +64,16 @@ class _CompareScreen extends State<CompareScreen> {
   }
 
   Future<void> _loadProperties() async {
-    setState(() => _properties = widget.properties.take(3).toList());
+    try {
+      final data = await PropertyQueryService.search(_filter);
+      if (!mounted) return;
+      setState(() => _properties = data.take(3).toList());
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not load properties: $e')),
+      );
+    }
   }
 
   Future<void> _openFilters() async {
@@ -83,21 +93,24 @@ class _CompareScreen extends State<CompareScreen> {
           listingType: _filter.listingType ?? 'rent',
         ),
       ),
-    ).then((added) {
-      if (added is Map<String, dynamic>) {
-        setState(() {
-          if (_properties.length < 3) {
-            _properties = [..._properties, added];
-          }
-        });
-      }
+    ).then((selected) {
+      if (!mounted || selected is! List) return;
+      setState(() {
+        for (final item in selected) {
+          if (_properties.length >= 3) break;
+          if (item is! Map<String, dynamic>) continue;
+          if (_properties.any((p) => p['id'] == item['id'])) continue;
+          _properties = [..._properties, item];
+        }
+      });
     });
   }
+
+  bool get isMobile => MediaQuery.of(context).size.width < 600;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final propertyTheme = theme.extension<PropertyThemeExtension>()!;
     final size = MediaQuery.of(context).size;
     final isMobile = size.width < 600;
     final isTwoItems = _properties.length == 2;
@@ -167,7 +180,7 @@ class _CompareScreen extends State<CompareScreen> {
         children: [
           Expanded(
             child: AppSearchField(
-              controller: TextEditingController(text: _filter.searchQuery),
+              controller: _searchCtrl,
               hint: 'Search for properties to add...',
               onSubmitted: (val) {
                 setState(() => _filter.searchQuery = val);
@@ -180,8 +193,7 @@ class _CompareScreen extends State<CompareScreen> {
           AppPrimaryButton(
             label: 'Search',
             onPressed: () => _loadProperties(),
-            height: 44,
-            minimumWidth: 80,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
           ),
         ],
       ),
@@ -190,9 +202,13 @@ class _CompareScreen extends State<CompareScreen> {
 
   Widget _buildSharedImageCarousel(ThemeData theme) {
     // Find the current property based on index
-    final currentProperty = _properties[_currentImageIndex];
+    // The carousel pages through the first property's images, so index it by the
+    // first property rather than by the image page (which can exceed the list).
+    final currentProperty = _properties.first;
     final images = (currentProperty['images'] as List?)?.cast<String>() ?? [];
     final imageCount = images.length;
+
+    if (imageCount == 0) return const SizedBox.shrink();
 
     return Container(
       height: 200,
@@ -209,7 +225,7 @@ class _CompareScreen extends State<CompareScreen> {
                   imageUrl: images[index],
                   fit: BoxFit.cover,
                   memCacheWidth: 800,
-                  placeholder: (_) => Container(
+                  placeholder: (_, __) => Container(
                     color: theme.colorScheme.surfaceContainerHighest,
                     child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
                   ),
@@ -249,13 +265,15 @@ class _CompareScreen extends State<CompareScreen> {
       return const Center(child: Text('No properties to compare'));
     }
 
+    final propertyTheme = theme.extension<PropertyThemeExtension>()!;
+
     // Responsive layout based on device and number of properties
     if (isMobile || isTwoItems) {
       // Vertical stack for mobile or 2 items
       return ListView.builder(
         itemCount: _properties.length,
         itemBuilder: (context, index) {
-          return _buildPropertyCard(theme, _properties[index], index);
+          return _buildPropertyCard(theme, propertyTheme, isMobile, _properties[index], index);
         },
       );
     } else {
@@ -267,7 +285,7 @@ class _CompareScreen extends State<CompareScreen> {
             child: SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                child: _buildPropertyCard(theme, property, index),
+                child: _buildPropertyCard(theme, propertyTheme, isMobile, property, index),
               ),
             ),
           );
@@ -276,7 +294,7 @@ class _CompareScreen extends State<CompareScreen> {
     }
   }
 
-  Widget _buildPropertyCard(ThemeData theme, Map<String, dynamic> property, int index) {
+  Widget _buildPropertyCard(ThemeData theme, PropertyThemeExtension propertyTheme, bool isMobile, Map<String, dynamic> property, int index) {
     final images = (property['images'] as List?)?.cast<String>() ?? [];
     final isRent = property['listing_type'] == 'rent';
     final propertyType = property['property_type'] ?? '';
@@ -289,7 +307,6 @@ class _CompareScreen extends State<CompareScreen> {
     final area = property['area'] ?? '';
     final rating = property['rating']?.toDouble() ?? 0;
     final reviews = property['review_count'] ?? 0;
-    final isSelected = _properties.contains(property);
 
     return AppCard.level2(
       margin: isMobile ? const EdgeInsets.only(bottom: AppSpacing.md) : const EdgeInsets.only(right: AppSpacing.md),
@@ -313,13 +330,13 @@ class _CompareScreen extends State<CompareScreen> {
                   if (rating > 0)
                     Row(
                       children: [
-                        Icon(Icons.star, size: 16, color: propertyTheme.warningColor),
+                        Icon(Icons.star, size: 16, color: Colors.amber),
                         const SizedBox(width: 4),
                         Text(
                           rating.toStringAsFixed(1),
                           style: theme.textTheme.bodyMedium?.copyWith(
                             fontWeight: FontWeight.w600,
-                            color: propertyTheme.warningColor,
+                            color: Colors.amber,
                           ),
                         ),
                       ],
@@ -346,7 +363,7 @@ class _CompareScreen extends State<CompareScreen> {
                         imageUrl: images.first,
                         fit: BoxFit.cover,
                         memCacheWidth: 600,
-                        placeholder: (_) => Container(
+                        placeholder: (_, __) => Container(
                           color: theme.colorScheme.surfaceContainerHighest,
                           child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
                         ),
@@ -422,7 +439,7 @@ class _CompareScreen extends State<CompareScreen> {
                     const SizedBox(width: 4),
                     Text(
                       '$reviews reviews',
-                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorColorScheme.onSurfaceVariant),
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -452,7 +469,7 @@ class _CompareScreen extends State<CompareScreen> {
                     child: Text(
                       city,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorColorScheme.onSurfaceVariant,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -510,22 +527,24 @@ class _CompareScreen extends State<CompareScreen> {
             children: [
               AppPrimaryButton(
                 label: 'Clear Selection',
-                onPressed: () => setState(() => _properties = []),
-                backgroundColor: theme.colorScheme.errorContainer,
-                foregroundColor: theme.colorScheme.error,
-                height: 40,
+                onPressed: _properties.isEmpty
+                    ? null
+                    : () => setState(() => _properties = []),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
               ),
               const SizedBox(width: AppSpacing.md),
               AppPrimaryButton(
                 label: 'Compare',
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CompareResultsScreen(properties: _properties),
-                  ),
-                ),
-                height: 40,
-                minimumWidth: 100,
+                // Comparing needs at least two properties to be meaningful.
+                onPressed: _properties.length >= 2
+                    ? () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CompareResultsScreen(properties: _properties),
+                          ),
+                        )
+                    : null,
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
               ),
             ],
           ),

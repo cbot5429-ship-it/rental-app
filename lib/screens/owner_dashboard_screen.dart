@@ -2,10 +2,12 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../main.dart' show supabase;
-import '../services/maintenance_service.dart';
 import 'incoming_requests_screen.dart';
 import 'property_detail_screen.dart';
+import 'add_property_screen.dart';
 import '../theme/app_theme.dart';
+import '../widgets/common/app_button.dart';
+import '../widgets/common/app_card.dart';
 
 class OwnerDashboardScreen extends StatefulWidget {
   const OwnerDashboardScreen({super.key});
@@ -15,6 +17,7 @@ class OwnerDashboardScreen extends StatefulWidget {
 }
 
 class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with SingleTickerProviderStateMixin {
+  bool get isTablet => MediaQuery.of(context).size.width > 600;
   late TabController _tabController;
   List<Map<String, dynamic>> _myProperties = [];
   int _pendingRequests = 0;
@@ -36,17 +39,39 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
 
   Future<void> _loadDashboard({bool refresh = false}) async {
     setState(() => _loading = true);
-    final uid = supabase.auth.currentUser!.id;
-    final props = await supabase.from('properties').select().eq('owner_id', uid).order('created_at', ascending: false);
-    final reqs = await supabase.from('rental_requests').select('id').eq('owner_id', uid).eq('status', 'pending');
-
-    if (mounted) {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) {
+      if (mounted) {
+        setState(() {
+          _myProperties = [];
+          _pendingRequests = 0;
+          _loading = false;
+        });
+      }
+      return;
+    }
+    try {
+      final props = await supabase
+          .from('properties')
+          .select()
+          .eq('owner_id', uid)
+          .order('created_at', ascending: false);
+      final reqs = await supabase
+          .from('rental_requests')
+          .select('id')
+          .eq('owner_id', uid)
+          .eq('status', 'pending');
+      if (!mounted) return;
       setState(() {
         _myProperties = List<Map<String, dynamic>>.from(props);
         _pendingRequests = reqs.length;
         _loading = false;
         if (!refresh) _previousStats = [];
       });
+    } catch (_) {
+      // Without this the spinner would never stop on a failed fetch.
+      if (!mounted) return;
+      setState(() => _loading = false);
     }
   }
 
@@ -57,8 +82,15 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
         title: const Text('Delete Property?'),
         content: const Text('This will permanently remove your listing.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text(
+                'Delete',
+                style: TextStyle(color: Colors.red),
+              )),
         ],
       ),
     );
@@ -72,8 +104,6 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final propertyTheme = theme.extension<PropertyThemeExtension>()!;
-    final size = MediaQuery.of(context).size;
-    final isTablet = size.width > 600;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -82,9 +112,9 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
         bottom: TabBar(
           controller: _tabController,
           tabs: const [Tab(text: 'Overview'), Tab(text: 'Listings')],
-          labelColor: propertyTheme.primaryColor,
+          indicatorColor: propertyTheme.rentColor,
+          labelColor: propertyTheme.rentColor,
           unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-          indicatorColor: propertyTheme.primaryColor,
         ),
         backgroundColor: theme.scaffoldBackgroundColor,
         surfaceTintColor: Colors.transparent,
@@ -93,16 +123,16 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
-            controller: _tabController,
-            children: [
-              _buildOverviewTab(theme, propertyTheme, isTablet),
-              _buildListingsTab(theme, propertyTheme),
-            ],
-          ),
+              controller: _tabController,
+              children: [
+                _buildOverviewTab(theme, propertyTheme),
+                _buildListingsTab(theme, propertyTheme),
+              ],
+            ),
     );
   }
 
-  Widget _buildOverviewTab(ThemeData theme, PropertyThemeExtension propertyTheme, bool isTablet) {
+  Widget _buildOverviewTab(ThemeData theme, PropertyThemeExtension propertyTheme) {
     return SingleChildScrollView(
       child: Padding(
         padding: EdgeInsets.symmetric(
@@ -112,13 +142,10 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Stats Cards with Trend Indicators
             _buildStatsSection(theme, propertyTheme),
             const SizedBox(height: AppSpacing.xl),
-            // Quick Actions
             _buildQuickActions(theme),
             const SizedBox(height: AppSpacing.xl),
-            // Recent Activity
             _buildRecentActivity(theme),
           ],
         ),
@@ -129,8 +156,8 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
   Widget _buildStatsSection(ThemeData theme, PropertyThemeExtension propertyTheme) {
     final total = _myProperties.length;
     final pending = _pendingRequests;
-    final active = total - (await _getDeletedCount());
-    final revenue = _calculateMonthlyRevenue();
+    final deletedCount = _previousStats.isNotEmpty ? (_previousStats.first['deleted'] ?? 0) : 0;
+    final active = total - deletedCount;
 
     return Row(
       children: [
@@ -153,8 +180,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
             trend: active > (_previousStats.isEmpty ? 0 : _previousStats.first['active'] ?? 0) ? '↑' : '→',
           ),
         ),
-        if (isTablet)
-          const SizedBox(width: AppSpacing.md),
+        if (isTablet) const SizedBox(width: AppSpacing.md),
         if (isTablet)
           Expanded(
             child: _StatCard(
@@ -202,8 +228,6 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                   MaterialPageRoute(builder: (_) => const IncomingRequestsScreen()),
                 ),
                 icon: Icons.inbox,
-                backgroundColor: theme.colorScheme.secondaryContainer,
-                foregroundColor: theme.colorScheme.secondary,
               ),
             ),
           ],
@@ -231,9 +255,12 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
           ),
           child: Column(
             children: [
-              _buildActivityItem(theme, 'New rental request', 'Apartment 3BHK in Koramangala', Icons.request_page),
-              _buildActivityItem(theme, 'Property viewed 15 times', 'Modern Villa in Whitefield', Icons.visibility),
-              _buildActivityItem(theme, 'Favorite added', 'Premium Office Space', Icons.favorite),
+              _buildActivityItem(
+                  theme, 'New rental request', 'Apartment 3BHK in Koramangala', Icons.request_page),
+              _buildActivityItem(
+                  theme, 'Property viewed 15 times', 'Modern Villa in Whitefield', Icons.visibility),
+              _buildActivityItem(
+                  theme, 'Favorite added', 'Premium Office Space', Icons.favorite),
             ],
           ),
         ),
@@ -241,7 +268,8 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
     );
   }
 
-  Widget _buildActivityItem(ThemeData theme, String title, String subtitle, IconData icon) {
+  Widget _buildActivityItem(
+      ThemeData theme, String title, String subtitle, IconData icon) {
     return ListTile(
       leading: Container(
         padding: const EdgeInsets.all(AppSpacing.xs),
@@ -257,7 +285,8 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
       ),
       subtitle: Text(
         subtitle,
-        style: theme.textTextTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant),
       ),
       trailing: const Icon(Icons.chevron_right),
       onTap: () {},
@@ -276,12 +305,14 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
           ),
           const SizedBox(height: 12),
           if (_myProperties.isEmpty)
-            const Center(
+            Center(
               child: Padding(
-                padding: EdgeInsets.all(32),
+                padding: const EdgeInsets.all(32),
                 child: Column(
                   children: [
-                    Icon(Icons.search_off, size: 48, color: theme.colorScheme.onSurfaceVariant),
+                    Icon(Icons.search_off,
+                        size: 48,
+                        color: theme.colorScheme.onSurfaceVariant),
                     const SizedBox(height: AppSpacing.md),
                     Text(
                       'You have no listings yet.',
@@ -292,7 +323,9 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                       label: 'Add Your First Property',
                       onPressed: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const AddPropertyScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const AddPropertyScreen(),
+                        ),
                       ),
                     ),
                   ],
@@ -300,19 +333,19 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
               ),
             )
           else
-            ..._myProperties.map((p) {
-              return _buildPropertyCard(theme, p);
-            }),
+            ..._myProperties.map((p) => _buildPropertyCard(theme, p)),
         ],
       ),
     );
   }
 
   Widget _buildPropertyCard(ThemeData theme, Map<String, dynamic> property) {
+    final propertyTheme = theme.extension<PropertyThemeExtension>()!;
     final images = (property['images'] as List?)?.cast<String>() ?? [];
-    final isRent = property['listing_type'] == 'rent';
     final price = property['price_per_month'] ?? 0;
     final bedrooms = property['bedrooms'] ?? 0;
+    final bathrooms = property['bathrooms'] ?? 0;
+    final area = property['area'] ?? 0;
     final views = property['view_count'] ?? 0;
     final status = property['status'] ?? 'active';
     final isFeatured = property['is_featured'] ?? false;
@@ -322,7 +355,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
       elevation: isFeatured ? 2 : 1,
       child: Column(
         children: [
-          // Property Header
+          // Header
           Row(
             children: [
               Expanded(
@@ -333,21 +366,22 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                   ),
                   subtitle: Row(
                     children: [
-                      Icon(Icons.location_on_outlined, size: 12, color: theme.colorScheme.onSurfaceVariant),
+                      Icon(Icons.location_on_outlined,
+                          size: 12,
+                          color: theme.colorScheme.onSurfaceVariant),
                       const SizedBox(width: 4),
-                      Text(
-                        property['city'] ?? '',
-                        style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-                      ),
+                      Text(property['city'] ?? '',
+                          style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
                     ],
                   ),
                 ),
               ),
               if (isFeatured)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: propertyTheme.rentColor.withOpacity(0.2),
+                    color: propertyTheme.rentColor.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -367,10 +401,10 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
               AspectRatio(
                 aspectRatio: 16 / 9,
                 child: CachedNetworkImage(
-                  imageUrl: images.isNotEmpty ? images.first : null,
+                  imageUrl: images.isNotEmpty ? images.first : '',
                   fit: BoxFit.cover,
                   memCacheWidth: 400,
-                  placeholder: (_) => Container(
+                  placeholder: (_, __) => Container(
                     color: theme.colorScheme.surfaceContainerHighest,
                     child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
                   ),
@@ -383,40 +417,37 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                   children: [
                     _buildStatusChip(theme, status),
                     const SizedBox(width: 8),
-                    Text(
-                      '$views views',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    Text('$views views',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        )),
                   ],
                 ),
               ),
             ],
           ),
-          // Price & Details
+          // Details
           Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '₹$price/month',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: propertyTheme.priceColor,
-                  ),
-                ),
+                Text('₹$price/month',
+                    style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: propertyTheme.priceColor)),
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildDetailRow(Icons.bed_outlined, '$bedrooms Beds'),
-                    _buildDetailRow(Icons.bathtub_outlined, '${property['bathrooms'] ?? 0} Baths'),
-                    _buildDetailRow(Icons.square_foot, '${property['area'] ?? 0} sqft'),
+                    _buildDetailRow(theme, Icons.bed_outlined, '$bedrooms Beds'),
+                    _buildDetailRow(theme, Icons.bathtub_outlined,
+                        '${bathrooms ?? 0} Baths'),
+                    _buildDetailRow(theme, Icons.square_foot,
+                        '${area ?? 0} sqft'),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -428,17 +459,16 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                         onPressed: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => PropertyDetailScreen(property: property),
-                          ),
+                              builder: (_) => PropertyDetailScreen(
+                                  property: property)),
                         ),
-                        height: 36,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
                       ),
                     ),
                     const SizedBox(width: 12),
                     IconButton(
                       icon: const Icon(Icons.more_vert),
-                      onPressed: () => _showPropertyMenu(context, property),
+                      onPressed: () => _showPropertyMenu(
+                          context, property),
                     ),
                   ],
                 ),
@@ -455,12 +485,14 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: isActive ? Colors.green.withOpacity(0.8) : Colors.orange.withOpacity(0.8),
+        color: isActive
+            ? Colors.green.withValues(alpha: 0.8)
+            : Colors.orange.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         isActive ? 'Active' : 'Pending',
-        style: TextStyle(
+        style: const TextStyle(
           color: Colors.white,
           fontSize: 10,
           fontWeight: FontWeight.w600,
@@ -469,118 +501,119 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
     );
   }
 
-  Widget _buildDetailRow(IconData icon, String text) {
+  Widget _buildDetailRow(ThemeData theme, IconData icon, String text) {
     return Row(
       children: [
         Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
         const SizedBox(width: 4),
-        Text(
-          text,
-          style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 12),
-        ),
+        Text(text,
+            style:
+                TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 12)),
       ],
     );
   }
 
   void _showPropertyMenu(BuildContext context, Map<String, dynamic> property) {
     showModalBottomSheet(
-      context: context,
-      builder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.edit),
-            title: const Text('Edit Property'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AddPropertyScreen(property: property),
+        context: context,
+        builder: (_) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.edit),
+                  title: const Text('Edit Property'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AddPropertyScreen(),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
+                ListTile(
+                  leading: const Icon(Icons.analytics),
+                  title: const Text('View Analytics'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    // Navigate to analytics screen
+                  },
+                ),
+                ListTile(
+                  leading:
+                      const Icon(Icons.delete, color: Colors.red),
+                  title: const Text('Delete Property', style: TextStyle(color: Colors.red)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _deleteProperty(property['id']);
+                  },
+                ),
+              ],
+            ));
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final String trend;
+
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.trend,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AppCard.level1(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              Text(
+                trend,
+                style: TextStyle(
+                  color: trend == '↑' ? Colors.green : theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ],
           ),
-          ListTile(
-            leading: const Icon(Icons.analytics),
-            title: const Text('View Analytics'),
-            onTap: () {
-              Navigator.pop(context);
-              // Navigate to analytics screen
-            },
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            value,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: theme.colorScheme.onSurface,
+            ),
           ),
-          ListTile(
-            leading: const Icon(Icons.delete, color: Colors.red),
-            title: const Text('Delete Property', style: TextStyle(color: Colors.red)),
-            onTap: () {
-              Navigator.pop(context);
-              _deleteProperty(property['id']);
-            },
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            title,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
-      ),
-    );
-  }
-
-  Future<int> _getDeletedCount() async {
-    // Simulate previous period stats for trend calculation
-    return 0;
-  }
-
-  double _calculateMonthlyRevenue() {
-    return _myProperties.fold(0, (sum, p) => sum + (p['price_per_month'] ?? 0));
-  }
-
-  Widget _StatCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color color,
-    String? trend,
-  }) {
-    final theme = Theme.of(context);
-    return Card(
-      color: color.withOpacity(0.1),
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-                if (trend != null)
-                  const SizedBox(width: 8),
-                if (trend != null)
-                  Text(
-                    trend,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: trend == '↑' ? Colors.green : theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-              ],
-            ),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

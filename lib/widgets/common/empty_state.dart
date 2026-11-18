@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
+import '../common/app_button.dart';
 
 /// Empty state illustration with action
 class EmptyState extends StatelessWidget {

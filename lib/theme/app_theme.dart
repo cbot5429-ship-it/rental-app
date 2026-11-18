@@ -349,7 +349,6 @@ ThemeData buildLightTheme() {
     // AppBar theme
     appBarTheme: AppBarTheme(
       backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 1,
       centerTitle: false,
@@ -367,7 +366,6 @@ ThemeData buildLightTheme() {
     // Card theme
     cardTheme: CardThemeData(
       color: Colors.white,
-      surfaceTintColor: Colors.transparent,
       elevation: 0,
       shadowColor: const Color(0x1A000000),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
@@ -498,7 +496,6 @@ ThemeData buildLightTheme() {
     // Bottom navigation bar theme
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
       backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
       elevation: 8,
       selectedItemColor: colorScheme.primary,
       unselectedItemColor: Colors.grey.shade500,
@@ -513,7 +510,6 @@ ThemeData buildLightTheme() {
     // Navigation bar theme (Material 3)
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
       elevation: 8,
       indicatorColor: colorScheme.primaryContainer,
       indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
@@ -570,7 +566,6 @@ ThemeData buildLightTheme() {
     // Dialog theme
     dialogTheme: DialogThemeData(
       backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
       elevation: 24,
       shadowColor: const Color(0x1A000000),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xxl)),
@@ -582,7 +577,6 @@ ThemeData buildLightTheme() {
     // Bottom sheet theme
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
       elevation: 24,
       shadowColor: const Color(0x1A000000),
       shape: const RoundedRectangleBorder(
@@ -602,7 +596,6 @@ ThemeData buildLightTheme() {
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
       elevation: 8,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       dismissDirection: DismissDirection.horizontal,
     ),
 
@@ -705,36 +698,16 @@ ThemeData buildLightTheme() {
     ),
 
     // Material banner theme
-    materialBannerTheme: MaterialBannerThemeData(
-      backgroundColor: colorScheme.surfaceContainerHighest,
-      leadingPadding: const EdgeInsets.all(16),
-      contentTextStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      dividerColor: colorScheme.outlineVariant,
-    ),
 
     // Time picker theme
     timePickerTheme: TimePickerThemeData(
       backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
       elevation: 8,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xxl)),
-      hourMinuteTextColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) return Colors.white;
-        return const Color(0xFF1D1D1F);
-      }),
-      hourMinuteColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) return colorScheme.primary;
-        return colorScheme.primaryContainer;
-      }),
-      dayPeriodTextColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) return Colors.white;
-        return colorScheme.primary;
-      }),
-      dayPeriodColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) return colorScheme.primary;
-        return colorScheme.primaryContainer;
-      }),
+      hourMinuteTextColor: const Color(0xFF1D1D1F),
+      hourMinuteColor: colorScheme.primaryContainer,
+      dayPeriodTextColor: colorScheme.primary,
+      dayPeriodColor: colorScheme.primaryContainer,
       dialHandColor: colorScheme.primary,
       dialBackgroundColor: colorScheme.primaryContainer,
       entryModeIconColor: colorScheme.primary,
@@ -743,7 +716,6 @@ ThemeData buildLightTheme() {
     // Date picker theme
     datePickerTheme: DatePickerThemeData(
       backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
       elevation: 8,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xxl)),
       headerBackgroundColor: colorScheme.primary,
@@ -789,14 +761,12 @@ ThemeData buildLightTheme() {
     // Popup menu theme
     popupMenuTheme: PopupMenuThemeData(
       color: Colors.white,
-      surfaceTintColor: Colors.transparent,
       elevation: 8,
       shadowColor: const Color(0x1A000000),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
       textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: Color(0xFF1D1D1F)),
       labelTextStyle: WidgetStateProperty.all(const TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: Color(0xFF1D1D1F))),
       iconColor: Colors.grey.shade600,
-      padding: const EdgeInsets.symmetric(vertical: 8),
     ),
 
     // Expansion tile theme
@@ -867,7 +837,6 @@ ThemeData buildDarkTheme() {
 
     appBarTheme: AppBarTheme(
       backgroundColor: const Color(0xFF1E1E1E),
-      surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 1,
       centerTitle: false,
@@ -884,7 +853,6 @@ ThemeData buildDarkTheme() {
 
     cardTheme: CardThemeData(
       color: const Color(0xFF1E1E1E),
-      surfaceTintColor: Colors.transparent,
       elevation: 0,
       shadowColor: const Color(0x33000000),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
@@ -1008,7 +976,6 @@ ThemeData buildDarkTheme() {
 
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
       backgroundColor: const Color(0xFF1E1E1E),
-      surfaceTintColor: Colors.transparent,
       elevation: 8,
       selectedItemColor: colorScheme.primary,
       unselectedItemColor: Colors.grey.shade500,
@@ -1022,7 +989,6 @@ ThemeData buildDarkTheme() {
 
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: const Color(0xFF1E1E1E),
-      surfaceTintColor: Colors.transparent,
       elevation: 8,
       indicatorColor: colorScheme.primaryContainer,
       indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
@@ -1075,7 +1041,6 @@ ThemeData buildDarkTheme() {
 
     dialogTheme: DialogThemeData(
       backgroundColor: const Color(0xFF1E1E1E),
-      surfaceTintColor: Colors.transparent,
       elevation: 24,
       shadowColor: const Color(0x33000000),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xxl)),
@@ -1086,7 +1051,6 @@ ThemeData buildDarkTheme() {
 
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: const Color(0xFF1E1E1E),
-      surfaceTintColor: Colors.transparent,
       elevation: 24,
       shadowColor: const Color(0x33000000),
       shape: const RoundedRectangleBorder(
@@ -1105,7 +1069,6 @@ ThemeData buildDarkTheme() {
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
       elevation: 8,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       dismissDirection: DismissDirection.horizontal,
     ),
 
@@ -1200,35 +1163,15 @@ ThemeData buildDarkTheme() {
       excludeFromSemantics: false,
     ),
 
-    materialBannerTheme: MaterialBannerThemeData(
-      backgroundColor: colorScheme.surfaceContainerHighest,
-      leadingPadding: const EdgeInsets.all(16),
-      contentTextStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      dividerColor: colorScheme.outlineVariant,
-    ),
 
     timePickerTheme: TimePickerThemeData(
       backgroundColor: const Color(0xFF1E1E1E),
-      surfaceTintColor: Colors.transparent,
       elevation: 8,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xxl)),
-      hourMinuteTextColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) return Colors.white;
-        return const Color(0xFFE4E4E7);
-      }),
-      hourMinuteColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) return colorScheme.primary;
-        return colorScheme.primaryContainer;
-      }),
-      dayPeriodTextColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) return Colors.white;
-        return colorScheme.primary;
-      }),
-      dayPeriodColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) return colorScheme.primary;
-        return colorScheme.primaryContainer,
-      }),
+      hourMinuteTextColor: const Color(0xFFE4E4E7),
+      hourMinuteColor: colorScheme.primaryContainer,
+      dayPeriodTextColor: colorScheme.primary,
+      dayPeriodColor: colorScheme.primaryContainer,
       dialHandColor: colorScheme.primary,
       dialBackgroundColor: colorScheme.primaryContainer,
       entryModeIconColor: colorScheme.primary,
@@ -1236,7 +1179,6 @@ ThemeData buildDarkTheme() {
 
     datePickerTheme: DatePickerThemeData(
       backgroundColor: const Color(0xFF1E1E1E),
-      surfaceTintColor: Colors.transparent,
       elevation: 8,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xxl)),
       headerBackgroundColor: colorScheme.primary,
@@ -1280,14 +1222,12 @@ ThemeData buildDarkTheme() {
 
     popupMenuTheme: PopupMenuThemeData(
       color: const Color(0xFF1E1E1E),
-      surfaceTintColor: Colors.transparent,
       elevation: 8,
       shadowColor: const Color(0x33000000),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
       textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: Color(0xFFE4E4E7)),
       labelTextStyle: WidgetStateProperty.all(const TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: Color(0xFFE4E4E7))),
       iconColor: Colors.grey.shade400,
-      padding: const EdgeInsets.symmetric(vertical: 8),
     ),
 
     expansionTileTheme: ExpansionTileThemeData(

@@ -11,16 +11,28 @@ class CompareResultsScreen extends StatefulWidget {
   State<CompareResultsScreen> createState() => _CompareResultsScreenState();
 }
 
-class _CompareResultsScreenState extends StatelessWidget {
-  const _CompareResultsScreenState({super.key});
-
+class _CompareResultsScreenState extends State<CompareResultsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final propertyTheme = theme.extension<PropertyThemeExtension>()!;
     final size = MediaQuery.of(context).size;
     final isMobile = size.width < 600;
     final properties = widget.properties;
+
+    // Without this guard the summary below calls reduce() on an empty list.
+    if (properties.isEmpty) {
+      return Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        appBar: AppBar(
+          title: const Text('Property Comparison'),
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: const Center(child: Text('Select at least two properties to compare.')),
+      );
+    }
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -49,7 +61,8 @@ class _CompareResultsScreenState extends StatelessWidget {
   }
 
   Widget _buildSummary(ThemeData theme, List<Map<String, dynamic>> properties) {
-    final totalPrice = properties.fold(0, (sum, p) => sum + (p['price_per_month'] ?? 0));
+    final propertyTheme = theme.extension<PropertyThemeExtension>()!;
+    final totalPrice = properties.fold<int>(0, (sum, p) => sum + (p['price_per_month'] as num? ?? 0).toInt());
     final avgBeds = properties.map((p) => p['bedrooms'] ?? 0).reduce((a, b) => a + b) / properties.length;
     final avgBaths = properties.map((p) => p['bathrooms'] ?? 0).reduce((a, b) => a + b) / properties.length;
     final bestRated = properties.reduce((best, current) {
@@ -85,10 +98,10 @@ class _CompareResultsScreenState extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           Row(
-            mainAxisAlignment: MainAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
-                child: _buildSummaryCard(theme, 'Best Rated', '${bestRated['rating']?.toStringAsFixed(1) ?? 'N/A'}★', Icons.star, propertyTheme.warningColor),
+                child: _buildSummaryCard(theme, 'Best Rated', '${bestRated['rating']?.toStringAsFixed(1) ?? 'N/A'}★', Icons.star, propertyTheme.featuredColor),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -161,7 +174,7 @@ class _CompareResultsScreenState extends StatelessWidget {
     }
   }
 
-  Widget _buildDataRow(ThemeData theme, String feature, List<Map<String, dynamic>> properties, Function getValue) {
+  DataRow _buildDataRow(ThemeData theme, String feature, List<Map<String, dynamic>> properties, Function getValue) {
     return DataRow(
       cells: [
         DataCell(Text(feature, style: TextStyle(fontWeight: FontWeight.w600))),

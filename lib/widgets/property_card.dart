@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import '../services/favorite_service.dart';
 import '../theme/app_theme.dart';
 import 'common/app_card.dart';
-import 'common/app_button.dart';
+
+import '../models/property.dart';
 
 class PropertyCard extends StatefulWidget {
-  final Map<String, dynamic> property;
+  final Property property;
   final VoidCallback? onTap;
   final VoidCallback? onFavorite;
   final bool showFavorite;
@@ -37,14 +38,14 @@ class _PropertyCardState extends State<PropertyCard> {
   }
 
   Future<void> _checkFav() async {
-    final fav = await FavoriteService.isFavorite(widget.property['id']);
+    final fav = await FavoriteService.isFavorite(widget.property.id);
     if (mounted) setState(() => _isFav = fav);
   }
 
   Future<void> _toggleFav() async {
     setState(() => _isFav = !_isFav);
     try {
-      await FavoriteService.toggle(widget.property['id']);
+      await FavoriteService.toggle(widget.property.id);
     } catch (_) {
       if (mounted) setState(() => _isFav = !_isFav);
     }
@@ -53,15 +54,8 @@ class _PropertyCardState extends State<PropertyCard> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final propertyTheme = theme.extension<PropertyThemeExtension>()!;
-    final images = (widget.property['images'] as List?)?.cast<String>() ?? [];
-    final imageUrl = images.isNotEmpty ? images.first : null;
-    final listingType = widget.property['listing_type'] ?? 'rent';
-    final isRent = listingType == 'rent';
-
     return PropertyListCard(
-      property: widget.property,
+      property: widget.property.toJson(),
       onTap: widget.onTap,
       onFavorite: _toggleFav,
       isFavorite: _isFav,
@@ -96,7 +90,7 @@ class PropertyHorizontalCard extends StatelessWidget {
 
     return _PropertyHorizontalCard(
       property: property,
-      imageUrl: imageUrl,
+      imageUrl: imageUrl ?? '',
       isRent: isRent,
       onTap: onTap,
       onFavorite: onFavorite,
@@ -145,7 +139,7 @@ class _PropertyHorizontalCard extends StatelessWidget {
                   aspectRatio: 16 / 10,
                   child: imageUrl != null
                       ? CachedNetworkImage(
-                          imageUrl: imageUrl,
+                          imageUrl: imageUrl!,
                           fit: BoxFit.cover,
                           width: double.infinity,
                           memCacheWidth: 800,
@@ -213,7 +207,7 @@ class _PropertyHorizontalCard extends StatelessWidget {
                   ),
                 ),
                 // Image count indicator
-                if ((property['images'] as List?)?.length ?? 0 > 1)
+                if (((property['images'] as List?)?.length ?? 0) > 1)
                   Positioned(
                     bottom: AppSpacing.md,
                     right: AppSpacing.md,

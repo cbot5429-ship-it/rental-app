@@ -50,10 +50,23 @@ class _ReviewsSectionState extends State<ReviewsSection> {
         ],
       ),
     );
+    final comment = ctrl.text.trim();
+    ctrl.dispose();
     if (ok == true) {
-      await ReviewService.submit(propertyId: widget.propertyId, rating: rating, comment: ctrl.text.trim());
-      _reload();
-      if (mounted) setState(() {});
+      try {
+        await ReviewService.submit(
+          propertyId: widget.propertyId,
+          rating: rating,
+          comment: comment,
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not post review: $e')),
+        );
+        return;
+      }
+      if (mounted) setState(_reload);
     }
   }
 
@@ -90,7 +103,8 @@ class _ReviewsSectionState extends State<ReviewsSection> {
             
             return Column(
               children: rows.map((r) {
-                final name = r['profiles']?['full_name'] ?? 'User';
+                final rawName = (r['profiles']?['full_name'] as String?)?.trim() ?? '';
+                final name = rawName.isEmpty ? 'User' : rawName;
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(
@@ -102,7 +116,7 @@ class _ReviewsSectionState extends State<ReviewsSection> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       RatingBarIndicator(
-                        rating: (r['rating'] as num).toDouble(),
+                        rating: ((r['rating'] as num?) ?? 0).toDouble(),
                         itemSize: 14,
                         itemBuilder: (_, __) => const Icon(Icons.star, color: Colors.amber),
                       ),

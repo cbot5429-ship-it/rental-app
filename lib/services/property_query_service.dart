@@ -23,6 +23,13 @@ class PropertyQueryService {
     if (f.propertyType != null) q = q.eq('property_type', f.propertyType!);
     if (f.furnishing != null) q = q.eq('furnishing', f.furnishing!);
 
-    return await q.order('created_at', ascending: false);
+    switch (f.sortOrder) {
+      case 'price_asc':
+        return await q.order('price_per_month', ascending: true);
+      case 'price_desc':
+        return await q.order('price_per_month', ascending: false);
+      default:
+        return await q.order('created_at', ascending: false);
+    }
   }
 }

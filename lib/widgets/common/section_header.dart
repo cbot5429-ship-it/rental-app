@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
+import '../common/app_button.dart';
 
 /// A consistent section header with title and optional action
 class SectionHeader extends StatelessWidget {
@@ -271,12 +272,11 @@ class FilterChips extends StatelessWidget {
     return Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
-      padding: padding ?? const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       children: chips.map((chip) {
         final isSelected = selectedValues.contains(chip.value);
         return FilterChip(
-          label: Text(chip.label, style: theme.textTheme.labelMedium),
-          icon: chip.icon != null ? Icon(chip.icon, size: 16) : null,
+          label: Text(chip.label),
+          avatar: chip.icon != null ? Icon(chip.icon, size: 16) : null,
           selected: isSelected,
           onSelected: (selected) {
             final newSelection = Set<String>.from(selectedValues);
@@ -294,16 +294,10 @@ class FilterChips extends StatelessWidget {
           },
           selectedColor: theme.colorScheme.primaryContainer,
           checkmarkColor: theme.colorScheme.onPrimaryContainer,
-          labelStyle: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onPrimaryContainer);
-            }
-            return theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurface);
-          }),
+          labelStyle: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurface),
           backgroundColor: theme.colorScheme.surfaceContainerHighest,
           side: BorderSide.none,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.round)),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           visualDensity: VisualDensity.compact,
         );

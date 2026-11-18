@@ -31,15 +31,15 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // 👇 THE FIX: Force strict chronological ordering in Dart
   void _sortMessages(List<Map<String, dynamic>> rows) {
     final sorted = List<Map<String, dynamic>>.from(rows);
     sorted.sort((a, b) {
-      final timeA = DateTime.parse(a['created_at']);
-      final timeB = DateTime.parse(b['created_at']);
-      return timeA.compareTo(timeB); // Oldest at top, newest at bottom
+      final timeA = DateTime.tryParse('${a['created_at']}') ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final timeB = DateTime.tryParse('${b['created_at']}') ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return timeA.compareTo(timeB);
     });
-    
+
+    if (!mounted) return;
     setState(() => _messages = sorted);
     _scrollToBottom();
   }
@@ -60,7 +60,13 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
     _ctrl.clear();
-    await MessageService.send(widget.conversationId, text);
+    try {
+      await MessageService.send(widget.conversationId, text);
+    } catch (e) {
+      if (!mounted) return;
+      _ctrl.text = text;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Message not sent: $e')));
+    }
   }
 
   @override
@@ -73,14 +79,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final uid = supabase.auth.currentUser!.id;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final uid = supabase.auth.currentUser?.id;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    if (uid == null) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.otherName), centerTitle: true),
+        body: const Center(child: Text('Sign in to view this conversation.')),
+      );
+    }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.otherName),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: Text(widget.otherName), centerTitle: true),
       body: Column(
         children: [
           Expanded(
@@ -91,8 +102,8 @@ class _ChatScreenState extends State<ChatScreen> {
               itemBuilder: (_, i) {
                 final m = _messages[i];
                 final mine = m['sender_id'] == uid;
-                final time = DateTime.parse(m['created_at']).toLocal();
-                final timeString = DateFormat.jm().format(time); // e.g., "10:30 AM"
+                final time = (DateTime.tryParse('${m['created_at']}') ?? DateTime.now()).toLocal();
+                final timeString = DateFormat.jm().format(time);
 
                 return Align(
                   alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
@@ -100,8 +111,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: mine 
-                          ? Theme.of(context).colorScheme.primary 
+                      color: mine
+                          ? theme.colorScheme.primary
                           : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(16),
@@ -109,13 +120,6 @@ class _ChatScreenState extends State<ChatScreen> {
                         bottomLeft: Radius.circular(mine ? 16 : 0),
                         bottomRight: Radius.circular(mine ? 0 : 16),
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 2,
-                          offset: const Offset(0, 1),
-                        )
-                      ]
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
@@ -171,7 +175,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(width: 8),
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    backgroundColor: theme.colorScheme.primary,
                     child: IconButton(
                       onPressed: _send,
                       icon: const Icon(Icons.send, color: Colors.white, size: 20),
