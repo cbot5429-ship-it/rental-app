@@ -50,23 +50,10 @@ class _ReviewsSectionState extends State<ReviewsSection> {
         ],
       ),
     );
-    final comment = ctrl.text.trim();
-    ctrl.dispose();
     if (ok == true) {
-      try {
-        await ReviewService.submit(
-          propertyId: widget.propertyId,
-          rating: rating,
-          comment: comment,
-        );
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not post review: $e')),
-        );
-        return;
-      }
-      if (mounted) setState(_reload);
+      await ReviewService.submit(propertyId: widget.propertyId, rating: rating, comment: ctrl.text.trim());
+      _reload();
+      if (mounted) setState(() {});
     }
   }
 
@@ -82,7 +69,7 @@ class _ReviewsSectionState extends State<ReviewsSection> {
             if (_summary != null && (_summary!['review_count'] ?? 0) > 0)
               Row(children: [
                 const Icon(Icons.star, size: 18, color: Colors.amber),
-                Text(' ${_summary!['avg_rating']} (${_summary!['review_count']})', style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(' ${_summary!['avg_rating']} (${_summary!['review_count']})'),
               ]),
             const Spacer(),
             TextButton.icon(
@@ -99,29 +86,24 @@ class _ReviewsSectionState extends State<ReviewsSection> {
               return const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()));
             }
             final rows = snap.data ?? [];
-            if (rows.isEmpty) return const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('No reviews yet.', style: TextStyle(color: Colors.grey)));
+            if (rows.isEmpty) return const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('No reviews yet.'));
             
             return Column(
               children: rows.map((r) {
-                final rawName = (r['profiles']?['full_name'] as String?)?.trim() ?? '';
-                final name = rawName.isEmpty ? 'User' : rawName;
+                final name = r['profiles']?['full_name'] ?? 'User';
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                    child: Text(name[0].toUpperCase(), style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
-                  ),
-                  title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  leading: const CircleAvatar(child: Icon(Icons.person)),
+                  title: Text(name),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       RatingBarIndicator(
-                        rating: ((r['rating'] as num?) ?? 0).toDouble(),
-                        itemSize: 14,
+                        rating: (r['rating'] as num).toDouble(),
+                        itemSize: 16,
                         itemBuilder: (_, __) => const Icon(Icons.star, color: Colors.amber),
                       ),
-                      const SizedBox(height: 4),
-                      if ((r['comment'] ?? '').toString().isNotEmpty) Text(r['comment'], style: const TextStyle(color: Colors.grey)),
+                      if ((r['comment'] ?? '').toString().isNotEmpty) Text(r['comment']),
                     ],
                   ),
                 );

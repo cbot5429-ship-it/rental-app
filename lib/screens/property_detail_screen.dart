@@ -1,14 +1,14 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
-import '../models/property.dart';
-import '../services/favorite_service.dart';
+import '../widgets/reviews_section.dart';
+import '../main.dart' show supabase;
 import '../services/message_service.dart';
 import '../services/rental_request_service.dart';
-import '../widgets/property_card.dart';
+import '../services/maintenance_service.dart'; // 👈 New Service
+import 'chat_screen.dart';
 
 class PropertyDetailScreen extends StatefulWidget {
-  final Property property;
+  final Map<String, dynamic> property;
   const PropertyDetailScreen({super.key, required this.property});
 
   @override
@@ -16,134 +16,52 @@ class PropertyDetailScreen extends StatefulWidget {
 }
 
 class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
-  bool _isFavorite = false;
-  bool _loadingFavorite = false;
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
 
   @override
-  void initState() {
-    super.initState();
-    _checkFavorite();
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
-  Future<void> _checkFavorite() async {
-    setState(() => _loadingFavorite = true);
-    final isFav = await FavoriteService.isFavorite(widget.property.id);
-    if (mounted) {
-      setState(() {
-        _isFavorite = isFav;
-        _loadingFavorite = false;
-      });
-    }
-  }
-
-  Future<void> _toggleFavorite() async {
-    setState(() => _isFavorite = !_isFavorite);
-    try {
-      await FavoriteService.toggle(widget.property.id);
-    } catch (_) {
-      if (mounted) setState(() => _isFavorite = !_isFavorite);
-    }
-  }
-
-  Future<void> _messageOwner() async {
-    final uid = supabase.auth.currentUser?.id;
-    if (uid == null) {
-      _showSnackBar('Please sign in to message the owner');
-      return;
-    }
-    if (widget.property.ownerId == uid) {
-      _showSnackBar('You own this property!');
-      return;
-    }
-
-    final convoId = await MessageService.getOrCreateConversation(
-      propertyId: widget.property.id,
-      ownerId: widget.property.ownerId,
-    );
-
-    if (convoId != null && mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ChatScreen(
-            conversationId: convoId,
-            otherName: 'Property Owner',
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _shareProperty() async {
-    final url = 'https://your-app.com/property/${widget.property.id}';
-    await Share.share(
-      'Check out this property: ${widget.property.title} - ${widget.property.formattedPrice}/month\n$url',
-      subject: widget.property.title,
-    );
-  }
-
-  Future<void> _openMap() async {
-    final address = widget.property.address ?? '';
-    final city = widget.property.city ?? '';
-    final query = Uri.encodeComponent('$address, $city');
-    final url = 'https://www.google.com/maps/search/?api=1&query=$query';
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } else {
-      _showSnackBar('Could not open map');
-    }
-  }
-
-  Future<void> _requestRent() async {
-    final controller = TextEditingController();
-    final confirmed = await showDialog<bool>(
+  // 👇 NEW: Submit Maintenance Request Dialog
+  void _showMaintenanceDialog() {
+    final ctrl = TextEditingController();
+    showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Send Rental Request'),
+        title: const Text('Report Maintenance Issue'),
         content: TextField(
-          controller: controller,
+          controller: ctrl,
           maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'Message to owner (optional)',
-            hintText: 'Introduce yourself...',
-            border: OutlineInputBorder(),
-          ),
+          decoration: const InputDecoration(labelText: 'Describe the issue...', border: OutlineInputBorder()),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Send')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () async {
+              if (ctrl.text.trim().isEmpty) return;
+              Navigator.pop(context);
+              await MaintenanceService.submitRequest(
+                propertyId: widget.property['id'],
+                ownerId: widget.property['owner_id'],
+                issue: ctrl.text.trim(),
+              );
+              if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Maintenance request sent!')));
+            },
+            child: const Text('Submit'),
+          ),
         ],
       ),
     );
-
-    if (confirmed != true) return;
-
-    final uid = supabase.auth.currentUser?.id;
-    if (uid == null) {
-      _showSnackBar('Please sign in to send a request');
-      return;
-    }
-
-    try {
-      await RentalRequestService.submitRequest(
-        propertyId: widget.property.id,
-        ownerId: widget.property.ownerId,
-        message: controller.text.trim().isEmpty ? null : controller.text.trim(),
-      );
-      if (mounted) _showSnackBar('Request sent!');
-    } catch (e) {
-      if (mounted) _showSnackBar('Could not send request: $e');
-    }
-  }
-
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final property = widget.property;
+    final images = (widget.property['images'] as List?)?.cast<String>() ?? [];
+    final listingType = widget.property['listing_type'] ?? 'rent';
+    final priceLabel = listingType == 'buy' ? 'Price' : 'Rent / month';
 
     return Scaffold(
       body: CustomScrollView(
@@ -152,26 +70,47 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
             expandedHeight: 300,
             pinned: true,
             flexibleSpace: FlexibleSpaceBar(
-              background: property.hasImages
-                  ? Image.network(
-                      property.mainImageUrl,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                    )
-                  : Container(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      child: const Center(child: Icon(Icons.home_work, size: 64)),
+              background: images.isEmpty
+                  ? Container(color: Colors.grey.shade300, child: const Icon(Icons.home, size: 64))
+                  : Stack(
+                      children: [
+                        PageView.builder(
+                          controller: _pageController,
+                          itemCount: images.length,
+                          onPageChanged: (index) => setState(() => _currentPage = index),
+                          itemBuilder: (_, i) => Container(
+                            color: Colors.black,
+                            child: CachedNetworkImage(imageUrl: images[i], fit: BoxFit.contain, memCacheWidth: 800),
+                          ),
+                        ),
+                        if (images.length > 1 && _currentPage > 0)
+                          Positioned(
+                            left: 8, top: 0, bottom: 0,
+                            child: Center(child: CircleAvatar(backgroundColor: Colors.black45, child: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 18), onPressed: () => _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut)))),
+                          ),
+                        if (images.length > 1 && _currentPage < images.length - 1)
+                          Positioned(
+                            right: 8, top: 0, bottom: 0,
+                            child: Center(child: CircleAvatar(backgroundColor: Colors.black45, child: IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 18), onPressed: () => _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut)))),
+                          ),
+                        if (images.length > 1)
+                          Positioned(
+                            bottom: 16, left: 0, right: 0,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(images.length, (index) {
+                                return Container(
+                                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                                  width: _currentPage == index ? 12 : 8,
+                                  height: _currentPage == index ? 12 : 8,
+                                  decoration: BoxDecoration(shape: BoxShape.circle, color: _currentPage == index ? Colors.white : Colors.white54),
+                                );
+                              }),
+                            ),
+                          ),
+                      ],
                     ),
             ),
-            actions: [
-              IconButton(
-                onPressed: _loadingFavorite ? null : _toggleFavorite,
-                icon: _loadingFavorite
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Icon(_isFavorite ? Icons.favorite : Icons.favorite_border, color: _isFavorite ? Colors.red : null),
-              ),
-              IconButton(onPressed: _shareProperty, icon: const Icon(Icons.share)),
-            ],
           ),
           SliverToBoxAdapter(
             child: Padding(
@@ -179,127 +118,127 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          property.title,
-                          style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: property.listingType == 'rent'
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.secondary,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          property.listingTypeLabel,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    property.formattedPrice,
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  Text(widget.property['title'] ?? '', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.location_on, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                      const Icon(Icons.location_on, color: Colors.grey),
                       const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          '${property.address ?? ''}, ${property.city ?? ''}',
-                          style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                        ),
-                      ),
+                      Text(widget.property['city'] ?? '', style: const TextStyle(fontSize: 16, color: Colors.grey)),
                     ],
                   ),
                   const SizedBox(height: 16),
+                  Text('₹${widget.property['price_per_month']} ($priceLabel)', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+                  const Divider(height: 32),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _FeatureChip(icon: Icons.bed_outlined, label: '${property.bedrooms ?? 0} Beds'),
-                      const SizedBox(width: 16),
-                      _FeatureChip(icon: Icons.bathtub_outlined, label: '${property.bathrooms ?? 0} Baths'),
-                      const SizedBox(width: 16),
-                      _FeatureChip(icon: Icons.category_outlined, label: property.propertyType ?? 'N/A'),
-                      const SizedBox(width: 16),
-                      _FeatureChip(icon: Icons.chair_outlined, label: property.furnishingLabel),
+                      _infoChip(Icons.bed, '${widget.property['bedrooms']} Beds'),
+                      _infoChip(Icons.bathtub, '${widget.property['bathrooms']} Baths'),
+                      _infoChip(Icons.chair, widget.property['furnishing'] ?? 'N/A'),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  if (property.amenities?.isNotEmpty == true) ...[
-                    Text('Amenities', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: property.amenities!.map((amenity) => Chip(
-                        label: Text(amenity),
-                        backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                      )).toList(),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  Text('Description', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  const Divider(height: 32),
+                  const Text('Description', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  Text(property.description ?? 'No description available', style: theme.textTheme.bodyLarge),
+                  Text(widget.property['description'] ?? 'No description provided.', style: const TextStyle(height: 1.5)),
+                  
                   const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _openMap,
-                          icon: const Icon(Icons.map_outlined),
-                          label: const Text('Open Map'),
-                        ),
+                  
+                  // Request to Rent (Only for Rent/Commercial)
+                  if (listingType != 'buy')
+                    SizedBox(
+                      width: double.infinity, height: 50,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.assignment_turned_in),
+                        label: const Text('Request to Rent'),
+                        onPressed: () async {
+                          final uid = supabase.auth.currentUser!.id;
+                          if (widget.property['owner_id'] == uid) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You own this property!')));
+                            return;
+                          }
+                          final ctrl = TextEditingController();
+                          final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              title: const Text('Send Request'),
+                              content: TextField(controller: ctrl, decoration: const InputDecoration(labelText: 'Message to owner...')),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                                FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Send')),
+                              ],
+                            ),
+                          );
+                          if (ok == true) {
+                            await RentalRequestService.submitRequest(propertyId: widget.property['id'], ownerId: widget.property['owner_id'], message: ctrl.text.trim());
+                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request sent!')));
+                          }
+                        },
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: _messageOwner,
-                          icon: const Icon(Icons.chat_bubble_outline),
-                          label: const Text('Message Owner'),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _shareProperty,
-                          icon: const Icon(Icons.share_outlined),
-                          label: const Text('Share Property'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: _requestRent,
-                          icon: const Icon(Icons.assignment_turned_in),
-                          label: const Text('Request to Rent'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: theme.colorScheme.secondary,
-                          ),
-                        ),
-                      ),
-                    ],
+
+                  // Message Owner
+                  SizedBox(
+                    width: double.infinity, height: 50,
+                    child: FilledButton.icon(
+                      icon: const Icon(Icons.chat_bubble_outline),
+                      label: const Text('Message Owner'),
+                      onPressed: () async {
+                        final ownerId = widget.property['owner_id'];
+                        final uid = supabase.auth.currentUser!.id;
+                        if (ownerId == uid) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You own this property!')));
+                          return;
+                        }
+                        final convoId = await MessageService.getOrCreateConversation(propertyId: widget.property['id'], ownerId: ownerId);
+                        if (!mounted) return;
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(conversationId: convoId, otherName: 'Owner')));
+                      },
+                    ),
                   ),
-                  const SizedBox(height: 32),
+                  
+                  const SizedBox(height: 12),
+
+                  // 👇 NEW: Maintenance Request Button
+                  SizedBox(
+                    width: double.infinity, height: 50,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.build, color: Colors.orange),
+                      label: const Text('Report Maintenance Issue', style: TextStyle(color: Colors.orange)),
+                      onPressed: _showMaintenanceDialog,
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+                  // Report Listing
+                  TextButton.icon(
+                    icon: const Icon(Icons.flag, color: Colors.red),
+                    label: const Text('Report this listing', style: TextStyle(color: Colors.red)),
+                    onPressed: () async {
+                      final ctrl = TextEditingController();
+                      final ok = await showDialog<bool>(
+                        context: context,
+                        builder: (_) => AlertDialog(
+                          title: const Text('Report Listing'),
+                          content: TextField(controller: ctrl, decoration: const InputDecoration(labelText: 'Why are you reporting this?')),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Submit')),
+                          ],
+                        ),
+                      );
+                      if (ok == true) {
+                        await supabase.from('reports').insert({'property_id': widget.property['id'], 'reporter_id': supabase.auth.currentUser!.id, 'reason': ctrl.text.trim()});
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report submitted.')));
+                      }
+                    },
+                  ),
+                  
+                  const Divider(height: 32),
+                  ReviewsSection(propertyId: widget.property['id']),
+                  const SizedBox(height: 48),
                 ],
               ),
             ),
@@ -308,21 +247,13 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
       ),
     );
   }
-}
 
-class _FeatureChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _FeatureChip({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+  Widget _infoChip(IconData icon, String label) {
+    return Column(
       children: [
-        Icon(icon, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
-        const SizedBox(width: 4),
-        Text(label, style: Theme.of(context).textTheme.bodyMedium),
+        Icon(icon, size: 28, color: Colors.grey.shade700),
+        const SizedBox(height: 4),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
       ],
     );
   }
